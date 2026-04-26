@@ -13,12 +13,11 @@
       font-family: 'Segoe UI', system-ui, sans-serif;
       cursor: default;
     }
-    #canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    #canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     #dogVideo {
-      position: fixed; width: 130px; height: auto;
-      transform: translate(-50%, -50%);
-      pointer-events: none; z-index: 50;
-      transition: left 0.05s linear, top 0.05s linear, width 0.3s, opacity 0.3s;
+      position: absolute; top: -9999px; left: -9999px;
+      width: 1px; height: 1px;
+      pointer-events: none;
     }
     #speechBubble {
       position: fixed; background: rgba(255,255,255,0.95); color: #1e1e2f;
@@ -104,8 +103,7 @@
 <canvas id="canvas"></canvas>
 <video id="dogVideo" muted playsinline preload="auto"
        poster="animations/start.png"
-       src="animations/walk.mp4"
-       style="left: 50%; top: 50%;">
+       src="animations/walk.webm">
 </video>
 <div id="dogBed">🛏️</div>
 <div id="menuButton">☰</div>
@@ -149,7 +147,7 @@
 (function(){
   "use strict";
 
-  // ========== НАСТРОЙКИ ВИЗУАЛА (сохраняются) ==========
+  // ========== НАСТРОЙКИ ВИЗУАЛА ==========
   const STORAGE_KEY = 'spitz_visual';
   let settings = {
     size: 100,
@@ -170,8 +168,6 @@
   }
 
   function applyVisualSettings() {
-    dogVideo.style.width = (settings.size / 100 * 130) + 'px';
-    dogVideo.style.opacity = settings.opacity / 100;
     document.getElementById('sizeSlider').value = settings.size;
     document.getElementById('opacitySlider').value = settings.opacity;
     document.getElementById('showPrintsCheck').checked = settings.showPrints;
@@ -192,12 +188,13 @@
   let lastActivity = Date.now();
   let actionCounter = 0;
   let particles = [];
+  let lastPawPrintTime = 0;
 
-  // ========== СОСТОЯНИЕ ПИТОМЦА ==========
+  // ========== СОСТОЯНИЕ МАЙБАХА ==========
   let pomeranian = {
     x: window.innerWidth/2, y: window.innerHeight/2,
     vx: 0, vy: 0,
-    mood: 'happy',            // calm, happy, tired, angry (для отображения)
+    mood: 'happy',
     isSleeping: false,
     isDragged: false,
     dragOffsetX: 0, dragOffsetY: 0,
@@ -216,8 +213,7 @@
     bedDragged: false,
     bedOffsetX: 0, bedOffsetY: 0,
     ball: { x: 0, y: 0, active: false, radius: 20 },
-    // Новые поля поведения
-    emotion: 'happy',         // happy, excited, bored, angry, sleepy
+    emotion: 'happy',
     bond: 0.6,
     memory: {
       lastPetTime: 0,
@@ -248,18 +244,18 @@
   const sleepStateText = document.getElementById('sleepStateText');
   const actionStateCount = document.getElementById('actionStateCount');
 
-  // ========== АНИМАЦИИ (имена файлов) ==========
+  // ========== АНИМАЦИИ (ПУТИ К WEBM ДЛЯ ПРОЗРАЧНОСТИ) ==========
   const ANIM = {
     idle:    { src: null,                      type: 'poster' },
-    walk:    { src: 'animations/walk.mp4',     type: 'video', rate: 1.0 },
-    run:     { src: 'animations/run.mp4',      type: 'video', rate: 1.0 },
-    sleep:   { src: 'animations/sleep.mp4',    type: 'video', rate: 1.0, loop: true },
-    sitting: { src: 'animations/sitting.mp4',  type: 'video', rate: 1.0, loop: true },
-    looking_back: { src: 'animations/looking_back.mp4', type: 'video', rate: 1.0, once: true },
-    sneeze:  { src: 'animations/sneeze.mp4',   type: 'video', rate: 2.0, once: true },
+    walk:    { src: 'animations/walk.webm',    type: 'video', rate: 1.0 },
+    run:     { src: 'animations/run.webm',     type: 'video', rate: 1.0 },
+    sleep:   { src: 'animations/sleep.webm',   type: 'video', rate: 1.0, loop: true },
+    sitting: { src: 'animations/sitting.webm', type: 'video', rate: 1.0, loop: true },
+    looking_back: { src: 'animations/looking_back.webm', type: 'video', rate: 1.0, once: true },
+    sneeze:  { src: 'animations/sneeze.webm',  type: 'video', rate: 2.0, once: true },
   };
 
-  // ========== ФРАЗЫ ДЛЯ ПРОБУЖДЕНИЯ ==========
+  // ========== ФРАЗЫ ==========
   const angryWakeUpPhrases = [
     "КТО МЕНЯ ТРЯСЁТ?!", "НЕ ТРОГАЙ СПЯЩЕГО ПСА!", "Я ТЕБЕ СЕЙЧАС ПОКАЖУ ГРОМКИЙ ЗВУК!",
     "ТЫ ЧТО, С УМА СОШЁЛ?!", "ГАВ-ГАВ-ГАВ!!!", "МАЙБАХ НЕ ДОВОЛЕН!!!"
@@ -268,7 +264,6 @@
     "Ты чего? Я так сладко спал...", "Зачем разбудили?", "Ладно, давай играть.",
     "Я ещё немного уставший...", "Ну что там у тебя?"
   ];
-
   const OWNER_PHRASES = [
     "Соня — самая лучшая хозяйка в мире! Гав!",
     "Обожаю Соню, она меня чешет за ушком.",
@@ -298,11 +293,8 @@
   };
 
   function clamp(v, min, max) {
-    return Math.max(min, Math.max(min, Math.min(max, v)));
+    return Math.max(min, Math.min(max, v));
   }
-
-  // ========== КОНФИГ API ==========
-  let CONFIG = { apiKeys: [], models: [], systemPrompt: '' };
 
   // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
   function processReply(text) {
@@ -339,7 +331,7 @@
     actionStateCount.textContent = actionCounter;
   }
 
-  // ========== ЭМОЦИИ И ПРИВЯЗАННОСТЬ ==========
+  // ========== ЭМОЦИИ ==========
   function updateEmotion() {
     const now = Date.now();
     if (pomeranian.isSleeping) {
@@ -358,7 +350,7 @@
     pomeranian.bond = clamp(pomeranian.bond, 0, 1);
   }
 
-  // ========== СИСТЕМА НУЖД ==========
+  // ========== НУЖДЫ ==========
   function updateNeeds(dt) {
     needs.energy -= dt * 0.00002;
     needs.fun -= dt * 0.000015;
@@ -391,7 +383,7 @@
     return setState(STATE.WANDER);
   }
 
-  // ========== УПРАВЛЕНИЕ СОСТОЯНИЯМИ ==========
+  // ========== GO TO ==========
   function goTo(targetX, targetY, duration, nextState) {
     if (pomeranian.isDragged || pomeranian.isSleeping) {
       stateLocked = false;
@@ -414,6 +406,26 @@
     };
   }
 
+  function updateMoveToTarget() {
+    if (!pomeranian.isMovingToTarget) return;
+    const elapsed = performance.now() - pomeranian.moveStartTime;
+    const t = Math.min(1, elapsed / pomeranian.moveDuration);
+    const eased = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
+    pomeranian.x = pomeranian.moveStartX + (pomeranian.targetX - pomeranian.moveStartX) * eased;
+    pomeranian.y = pomeranian.moveStartY + (pomeranian.targetY - pomeranian.moveStartY) * eased;
+    if (t >= 1) {
+      pomeranian.x = pomeranian.targetX;
+      pomeranian.y = pomeranian.targetY;
+      pomeranian.isMovingToTarget = false;
+      if (pomeranian.onMoveComplete) {
+        const cb = pomeranian.onMoveComplete;
+        pomeranian.onMoveComplete = null;
+        cb();
+      }
+    }
+  }
+
+  // ========== УСТАНОВКА СОСТОЯНИЯ ==========
   function setState(newState) {
     currentState = newState;
     switch (newState) {
@@ -471,27 +483,7 @@
     }
   }
 
-  // ========== ПЕРЕМЕЩЕНИЕ К ЦЕЛИ (обновление) ==========
-  function updateMoveToTarget() {
-    if (!pomeranian.isMovingToTarget) return;
-    const elapsed = performance.now() - pomeranian.moveStartTime;
-    const t = Math.min(1, elapsed / pomeranian.moveDuration);
-    const eased = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
-    pomeranian.x = pomeranian.moveStartX + (pomeranian.targetX - pomeranian.moveStartX) * eased;
-    pomeranian.y = pomeranian.moveStartY + (pomeranian.targetY - pomeranian.moveStartY) * eased;
-    if (t >= 1) {
-      pomeranian.x = pomeranian.targetX;
-      pomeranian.y = pomeranian.targetY;
-      pomeranian.isMovingToTarget = false;
-      if (pomeranian.onMoveComplete) {
-        const cb = pomeranian.onMoveComplete;
-        pomeranian.onMoveComplete = null;
-        cb();
-      }
-    }
-  }
-
-  // ========== АВТОНОМНАЯ ЖИЗНЬ (микро-реакции) ==========
+  // ========== МИКРО-ДЕЙСТВИЯ ==========
   function spontaneousActions() {
     if (pomeranian.isSleeping || pomeranian.isDragged || pomeranian.isMovingToTarget) return;
     if (Math.random() < 0.002) {
@@ -502,7 +494,12 @@
     }
   }
 
-  // ========== ВЗАИМОДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЯ ==========
+  // ========== ОБРАБОТЧИКИ ЗАХВАТА ==========
+  function isInsideDog(px, py) {
+    const dx = px - pomeranian.x, dy = py - pomeranian.y;
+    return (dx*dx)/(60*60) + (dy*dy)/(60*60) <= 1;
+  }
+
   function handleDragStart(clientX, clientY) {
     if (pomeranian.carryingMeme || pomeranian.carryingBall) return false;
     if (pomeranian.isSleeping) { softWakeUp('grab'); return false; }
@@ -528,7 +525,7 @@
     pomeranian.dragOffsetX = pomeranian.x - clientX;
     pomeranian.dragOffsetY = pomeranian.y - clientY;
     lastActivity = Date.now();
-    stateLocked = false; // даём возможность передумать
+    stateLocked = false;
     return true;
   }
 
@@ -548,22 +545,124 @@
     pomeranian.memory.lastPetTime = Date.now();
   }
 
-  // ========== ГРАФИЧЕСКИЕ ЭЛЕМЕНТЫ (мемы, следы, мяч) ==========
-  function createExplosion(x, y) {
-    for (let i=0; i<12; i++) {
-      const angle = (Math.PI*2 * i) / 12;
-      const speed = 2 + Math.random() * 4;
-      particles.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.6 + Math.random() * 0.4,
-        maxLife: 0.6 + Math.random() * 0.4,
-        size: 4 + Math.random() * 6
-      });
-    }
+  // ========== СОН ==========
+  function moveToBedAndSleep() {
+    if (pomeranian.isSleeping) return;
+    const bedCenterX = pomeranian.bedX + 80;
+    const bedCenterY = pomeranian.bedY + 50;
+    pomeranian.isMovingToTarget = true;
+    pomeranian.targetX = bedCenterX;
+    pomeranian.targetY = bedCenterY - 20;
+    pomeranian.moveStartTime = performance.now();
+    pomeranian.moveDuration = 2000;
+    pomeranian.moveStartX = pomeranian.x;
+    pomeranian.moveStartY = pomeranian.y;
+    pomeranian.onMoveComplete = () => { goToSleep(); };
+    setAnimation('run');
   }
 
+  function goToSleep() {
+    pomeranian.isSleeping = true;
+    updateSleepDisplay();
+    pomeranian.vx = pomeranian.vy = 0;
+    sleepIndicator.style.opacity = '1';
+    setAnimation('sleep');
+    showBubble('😴 Хррр...', 2000);
+    playSnore();
+    if (!pomeranian.facingRight) {
+      pomeranian.facingRight = true;
+    }
+    const bedCenterX = pomeranian.bedX + 80;
+    const bedCenterY = pomeranian.bedY + 50;
+    pomeranian.x = bedCenterX;
+    pomeranian.y = bedCenterY - 20;
+  }
+
+  function softWakeUp(reason = 'message') {
+    if (!pomeranian.isSleeping) return;
+    pomeranian.isSleeping = false;
+    updateSleepDisplay();
+    sleepIndicator.style.opacity = '0';
+    pomeranian.mood = 'tired';
+    updateMoodDisplay();
+    const phrase = softWakeUpPhrases[Math.floor(Math.random() * softWakeUpPhrases.length)];
+    showBubble(phrase, 3000);
+    speakText(phrase);
+    lastActivity = Date.now();
+    setAnimation('idle');
+    stateLocked = false;
+  }
+
+  function angryWakeUp() {
+    if (!pomeranian.isSleeping) return;
+    pomeranian.isSleeping = false;
+    updateSleepDisplay();
+    sleepIndicator.style.opacity = '0';
+    pomeranian.mood = 'angry';
+    updateMoodDisplay();
+    const phrase = angryWakeUpPhrases[Math.floor(Math.random() * angryWakeUpPhrases.length)];
+    showBubble(phrase.toUpperCase(), 3000);
+    speakText(phrase.toUpperCase());
+    pomeranian.vx = (Math.random() - 0.5) * 8;
+    pomeranian.vy = (Math.random() - 0.5) * 8;
+    setAnimation('run');
+    lastActivity = Date.now();
+    stateLocked = false;
+  }
+
+  // ========== ЗВУКИ ==========
+  function playSnore() {
+    try {
+      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ac.createOscillator(); osc.type='sawtooth';
+      osc.frequency.setValueAtTime(120, ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(80, ac.currentTime+0.5);
+      const g = ac.createGain(); g.gain.setValueAtTime(0.1, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.8);
+      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.8);
+    } catch(e){}
+  }
+  function playBark() {
+    try {
+      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ac.createOscillator(); osc.type='triangle';
+      osc.frequency.setValueAtTime(700, ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(400, ac.currentTime+0.15);
+      const g = ac.createGain(); g.gain.setValueAtTime(0.3, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.2);
+      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.2);
+      if (!pomeranian.isSleeping) showBubble('ГАВ!', 1000);
+    } catch(e){}
+  }
+  function playAngryBark() {
+    try {
+      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ac.createOscillator(); osc.type='sawtooth';
+      osc.frequency.setValueAtTime(300, ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, ac.currentTime+0.3);
+      const g = ac.createGain(); g.gain.setValueAtTime(0.4, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.4);
+      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.4);
+    } catch(e){}
+  }
+
+  function showBubble(text, duration=4000) {
+    bubble.style.opacity = '1';
+    bubble.textContent = text;
+    bubble.style.left = (pomeranian.x - 40) + 'px';
+    bubble.style.top = (pomeranian.y - 110) + 'px';
+    if (window.bubbleTimeout) clearTimeout(window.bubbleTimeout);
+    window.bubbleTimeout = setTimeout(()=>{ bubble.style.opacity = '0'; }, duration);
+  }
+
+  function speakText(text) {
+    if (!window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ru-RU'; u.rate = 1.1;
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+
+  // ========== МЕМЫ ==========
   function dropRandomMeme() {
     const list = ['1.jpg','2.png','3.gif'];
     const name = list[Math.floor(Math.random()*list.length)];
@@ -578,8 +677,6 @@
     });
   }
 
-  // ... остальные функции отрисовки (drawDroppedMemes, drawParticles, drawBall, addPawPrint, drawPawPrints) оставлены как в предыдущей версии
-  // Для экономии места я их тут сокращаю, но они присутствуют в полном коде
   function drawDroppedMemes() {
     const now = Date.now();
     for (let i = pomeranian.droppedMemes.length-1; i >= 0; i--) {
@@ -630,7 +727,6 @@
     ctx.fill();
   }
 
-  let lastPawPrintTime = 0;
   function addPawPrint() {
     if (!settings.showPrints) return;
     const now = Date.now();
@@ -640,6 +736,7 @@
     pomeranian.pawPrints.push({ x: pomeranian.x, y: pomeranian.y + 20, time: now });
     if (pomeranian.pawPrints.length > 40) pomeranian.pawPrints.shift();
   }
+
   function drawPawPrints() {
     if (!settings.showPrints) return;
     const now = Date.now();
@@ -663,7 +760,22 @@
     }
   }
 
-  // ========== АНИМАЦИЯ ==========
+  function createExplosion(x, y) {
+    for (let i=0; i<12; i++) {
+      const angle = (Math.PI*2 * i) / 12;
+      const speed = 2 + Math.random() * 4;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.6 + Math.random() * 0.4,
+        maxLife: 0.6 + Math.random() * 0.4,
+        size: 4 + Math.random() * 6
+      });
+    }
+  }
+
+  // ========== АНИМАЦИЯ ПСА ==========
   let animQueue = [];
   function setAnimation(animName) {
     if (pomeranian.currentAnim === animName && animName !== 'sneeze' && animName !== 'looking_back') return;
@@ -675,7 +787,8 @@
     }
     pomeranian.currentAnim = animName;
     if (anim.type === 'poster') {
-      dogVideo.pause(); dogVideo.currentTime = 0;
+      dogVideo.pause();
+      dogVideo.currentTime = 0;
     } else {
       dogVideo.src = anim.src;
       dogVideo.playbackRate = anim.rate || 1.0;
@@ -690,6 +803,7 @@
       } else dogVideo.onended = null;
     }
   }
+
   function updateAnimationByState() {
     if (pomeranian.isSleeping) { setAnimation('sleep'); return; }
     if (pomeranian.isDragged || pomeranian.isMovingToTarget) {
@@ -702,20 +816,54 @@
     else if (spd < 2.5) setAnimation('walk');
     else setAnimation('run');
   }
+
   function updateFacing() {
     if (pomeranian.isSleeping) return;
     const movingRight = pomeranian.vx > 0.1 || (pomeranian.isMovingToTarget && pomeranian.targetX > pomeranian.x);
     const movingLeft = pomeranian.vx < -0.1 || (pomeranian.isMovingToTarget && pomeranian.targetX < pomeranian.x);
     if (movingRight && !pomeranian.facingRight) {
       pomeranian.facingRight = true;
-      dogVideo.style.transform = 'translate(-50%, -50%) scaleX(1)';
     } else if (movingLeft && pomeranian.facingRight) {
       pomeranian.facingRight = false;
-      dogVideo.style.transform = 'translate(-50%, -50%) scaleX(-1)';
     }
   }
 
-  // ========== КОНФИГ И ЗАГРУЗКА API ==========
+  // ========== ОТРИСОВКА ПСА НА КАНВАСЕ ==========
+  function drawDogOnCanvas() {
+    const dogWidth = dogVideo.videoWidth || 130;
+    const dogHeight = dogVideo.videoHeight || 130;
+    const scale = settings.size / 100;
+    const drawWidth = dogWidth * scale;
+    const drawHeight = dogHeight * scale;
+    const x = pomeranian.x - drawWidth / 2;
+    const y = pomeranian.y - drawHeight / 2;
+
+    if (pomeranian.currentAnim === 'idle') {
+      const poster = new Image();
+      poster.src = 'animations/start.png';
+      if (poster.complete) {
+        ctx.drawImage(poster, x, y, drawWidth, drawHeight);
+      }
+      return;
+    }
+
+    if (dogVideo.readyState >= 2 && !dogVideo.ended) {
+      ctx.save();
+      if (!pomeranian.facingRight) {
+        ctx.translate(pomeranian.x, pomeranian.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(dogVideo, -drawWidth/2, -drawHeight/2, drawWidth, drawHeight);
+      } else {
+        ctx.drawImage(dogVideo, x, y, drawWidth, drawHeight);
+      }
+      ctx.restore();
+    }
+  }
+
+  // ========== КОНФИГ API ==========
+  let CONFIG = { apiKeys: [], models: [], systemPrompt: '' };
+  let currentApiKeyIndex = 0;
+
   async function loadConfig() {
     try {
       const res = await fetch('config.json');
@@ -724,30 +872,29 @@
       if (data.models?.length) CONFIG.models = data.models;
       if (data.systemPrompt) CONFIG.systemPrompt = data.systemPrompt;
     } catch(e) {
-      console.warn('config.json не загружен, ИИ будет недоступен');
+      console.warn('config.json не загружен');
     }
   }
 
-  let currentApiKeyIndex = 0;
   function getCurrentApiKey() {
     if (!CONFIG.apiKeys.length) return null;
     return CONFIG.apiKeys[currentApiKeyIndex];
   }
+
   function rotateApiKey() {
     if (!CONFIG.apiKeys.length) return null;
     currentApiKeyIndex = (currentApiKeyIndex + 1) % CONFIG.apiKeys.length;
     return CONFIG.apiKeys[currentApiKeyIndex];
   }
 
-  // ========== ВЗАИМОДЕЙСТВИЕ С ИИ ==========
   async function askAI(userMessage) {
     const apiKey = getCurrentApiKey();
     if (!apiKey) {
-      showBubble('Нет ключа API (config.json не загружен)', 3000);
+      showBubble('Нет ключа API', 3000);
       return;
     }
     const model = CONFIG.models?.[0] || 'google/gemma-4-31b-it:free';
-    const systemPrompt = CONFIG.systemPrompt || 'Ты — белый шпиц по имени Майбах. Твоя хозяйка — Соня.';
+    const systemPrompt = CONFIG.systemPrompt || 'Ты — белый шпиц Майбах. Твоя хозяйка — Соня.';
     const moodContext = `Настроение: ${pomeranian.emotion}, привязанность: ${pomeranian.bond.toFixed(2)}`;
 
     let retries = 0;
@@ -791,7 +938,7 @@
         incrementAction();
       } catch (e) {
         console.error(e);
-        showBubble('Ошибка связи с ИИ 😢', 3000);
+        showBubble('Ошибка связи 😢', 3000);
       }
     }
     attempt();
@@ -816,127 +963,30 @@
     askAI(message);
   }
 
-  // ========== ОСТАЛЬНЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (сон, пробуждение, лай...) ==========
-  function moveToBedAndSleep() {
-    if (pomeranian.isSleeping) return;
-    const bedCenterX = pomeranian.bedX + 80;
-    const bedCenterY = pomeranian.bedY + 50;
-    pomeranian.isMovingToTarget = true;
-    pomeranian.targetX = bedCenterX;
-    pomeranian.targetY = bedCenterY - 20;
-    pomeranian.moveStartTime = performance.now();
-    pomeranian.moveDuration = 2000;
-    pomeranian.moveStartX = pomeranian.x;
-    pomeranian.moveStartY = pomeranian.y;
-    pomeranian.onMoveComplete = () => { goToSleep(); };
-    setAnimation('run');
-  }
-
-  function goToSleep() {
-    pomeranian.isSleeping = true;
-    updateSleepDisplay();
-    pomeranian.vx = pomeranian.vy = 0;
-    sleepIndicator.style.opacity = '1';
-    setAnimation('sleep');
-    showBubble('😴 Хррр...', 2000);
-    playSnore();
-    if (!pomeranian.facingRight) {
-      pomeranian.facingRight = true;
-      dogVideo.style.transform = 'translate(-50%, -50%) scaleX(1)';
+  // ========== КЛИК ПО КАНВАСУ ==========
+  canvas.addEventListener('click', (e) => {
+    const mx = e.clientX, my = e.clientY;
+    for (let i = pomeranian.droppedMemes.length-1; i >= 0; i--) {
+      const m = pomeranian.droppedMemes[i];
+      const dx = mx - m.x, dy = my - m.y;
+      if (Math.sqrt(dx*dx+dy*dy) < 60 * m.scale) {
+        createExplosion(m.x, m.y);
+        pomeranian.droppedMemes.splice(i, 1);
+        incrementAction();
+        return;
+      }
     }
-    const bedCenterX = pomeranian.bedX + 80;
-    const bedCenterY = pomeranian.bedY + 50;
-    pomeranian.x = bedCenterX;
-    pomeranian.y = bedCenterY - 20;
-  }
-
-  function softWakeUp(reason = 'message') {
-    if (!pomeranian.isSleeping) return;
-    pomeranian.isSleeping = false;
-    updateSleepDisplay();
-    sleepIndicator.style.opacity = '0';
-    pomeranian.mood = 'tired';
-    updateMoodDisplay();
-    const phrase = softWakeUpPhrases[Math.floor(Math.random() * softWakeUpPhrases.length)];
-    showBubble(phrase, 3000);
-    speakText(phrase);
-    lastActivity = Date.now();
-    setAnimation('idle');
-    stateLocked = false;
-  }
-
-  function angryWakeUp() {
-    if (!pomeranian.isSleeping) return;
-    pomeranian.isSleeping = false;
-    updateSleepDisplay();
-    sleepIndicator.style.opacity = '0';
-    pomeranian.mood = 'angry';
-    updateMoodDisplay();
-    const phrase = angryWakeUpPhrases[Math.floor(Math.random() * angryWakeUpPhrases.length)];
-    showBubble(phrase.toUpperCase(), 3000);
-    speakText(phrase.toUpperCase());
-    pomeranian.vx = (Math.random() - 0.5) * 8;
-    pomeranian.vy = (Math.random() - 0.5) * 8;
-    setAnimation('run');
-    lastActivity = Date.now();
-    stateLocked = false;
-  }
-
-  function playSnore() {
-    try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
-      const osc = ac.createOscillator(); osc.type='sawtooth';
-      osc.frequency.setValueAtTime(120, ac.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(80, ac.currentTime+0.5);
-      const g = ac.createGain(); g.gain.setValueAtTime(0.1, ac.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.8);
-      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.8);
-    } catch(e){}
-  }
-  function playBark() {
-    try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
-      const osc = ac.createOscillator(); osc.type='triangle';
-      osc.frequency.setValueAtTime(700, ac.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(400, ac.currentTime+0.15);
-      const g = ac.createGain(); g.gain.setValueAtTime(0.3, ac.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.2);
-      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.2);
-      if (!pomeranian.isSleeping) showBubble('ГАВ!', 1000);
-    } catch(e){}
-  }
-  function playAngryBark() {
-    try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
-      const osc = ac.createOscillator(); osc.type='sawtooth';
-      osc.frequency.setValueAtTime(300, ac.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(150, ac.currentTime+0.3);
-      const g = ac.createGain(); g.gain.setValueAtTime(0.4, ac.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, ac.currentTime+0.4);
-      osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.4);
-    } catch(e){}
-  }
-
-  function showBubble(text, duration=4000) {
-    bubble.style.opacity = '1';
-    bubble.textContent = text;
-    bubble.style.left = (pomeranian.x - 40) + 'px';
-    bubble.style.top = (pomeranian.y - 110) + 'px';
-    if (window.bubbleTimeout) clearTimeout(window.bubbleTimeout);
-    window.bubbleTimeout = setTimeout(()=>{ bubble.style.opacity = '0'; }, duration);
-  }
-  function speakText(text) {
-    if (!window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ru-RU'; u.rate = 1.1;
-    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-  }
-
-  // ========== ОБРАБОТЧИКИ СОБЫТИЙ (канвас, меню, кнопки) ==========
-  function isInsideDog(px, py) {
-    const dx = px - pomeranian.x, dy = py - pomeranian.y;
-    return (dx*dx)/(60*60) + (dy*dy)/(60*60) <= 1;
-  }
+    if (pomeranian.ball.active) {
+      const dx = mx - pomeranian.ball.x, dy = my - pomeranian.ball.y;
+      if (Math.sqrt(dx*dx+dy*dy) < pomeranian.ball.radius) {
+        pomeranian.ball.active = false;
+        createExplosion(pomeranian.ball.x, pomeranian.ball.y);
+        setTimeout(() => spawnBall(), 5000);
+        incrementAction();
+        return;
+      }
+    }
+  });
 
   function spawnBall() {
     pomeranian.ball.x = 100 + Math.random() * (width-200);
@@ -944,7 +994,23 @@
     pomeranian.ball.active = true;
   }
 
-  // Перетаскивание лежанки
+  // ========== ДЕГРАДАЦИЯ ПРИВЯЗАННОСТИ ==========
+  setInterval(() => {
+    pomeranian.bond = clamp(pomeranian.bond - 0.002, 0, 1);
+  }, 5000);
+
+  // ========== ПЕРЕТАСКИВАНИЕ ЛЕЖАНКИ ==========
+  function updateMouse(clientX, clientY) { mouseX = clientX; mouseY = clientY; }
+  window.addEventListener('mousemove', (e) => updateMouse(e.clientX, e.clientY));
+  window.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY);
+  }, {passive: false});
+  window.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY);
+  }, {passive: false});
+
   dogBed.addEventListener('mousedown', (e) => {
     e.stopPropagation();
     pomeranian.bedDragged = true;
@@ -953,7 +1019,6 @@
     pomeranian.bedOffsetY = e.clientY - rect.top;
   });
   window.addEventListener('mousemove', (e) => {
-    updateMouse(e.clientX, e.clientY);
     if (!pomeranian.bedDragged) return;
     let newX = e.clientX - pomeranian.bedOffsetX;
     let newY = e.clientY - pomeranian.bedOffsetY;
@@ -986,10 +1051,7 @@
   });
   window.addEventListener('touchend', () => { pomeranian.bedDragged = false; });
 
-  function updateMouse(clientX, clientY) { mouseX = clientX; mouseY = clientY; }
-  window.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY); }, {passive: false});
-  window.addEventListener('touchstart', (e) => { e.preventDefault(); const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY); }, {passive: false});
-
+  // ========== ЗАХВАТ ПСА ==========
   window.addEventListener('mousedown', (e) => {
     if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton')) return;
     handleDragStart(e.clientX, e.clientY);
@@ -1001,34 +1063,13 @@
     e.preventDefault();
     const t = e.touches[0]; handleDragStart(t.clientX, t.clientY);
   }, {passive: false});
-  window.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; handleDragMove(t.clientX, t.clientY); }, {passive: false});
+  window.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; handleDragMove(t.clientX, t.clientY);
+  }, {passive: false});
   window.addEventListener('touchend', handleDragEnd);
 
-  canvas.addEventListener('click', (e) => {
-    const mx = e.clientX, my = e.clientY;
-    for (let i = pomeranian.droppedMemes.length-1; i >= 0; i--) {
-      const m = pomeranian.droppedMemes[i];
-      const dx = mx - m.x, dy = my - m.y;
-      if (Math.sqrt(dx*dx+dy*dy) < 60 * m.scale) {
-        createExplosion(m.x, m.y);
-        pomeranian.droppedMemes.splice(i, 1);
-        incrementAction();
-        return;
-      }
-    }
-    if (pomeranian.ball.active) {
-      const dx = mx - pomeranian.ball.x, dy = my - pomeranian.ball.y;
-      if (Math.sqrt(dx*dx+dy*dy) < pomeranian.ball.radius) {
-        pomeranian.ball.active = false;
-        createExplosion(pomeranian.ball.x, pomeranian.ball.y);
-        setTimeout(() => spawnBall(), 5000);
-        incrementAction();
-        return;
-      }
-    }
-  });
-
-  // ========== ИНИЦИАЛИЗАЦИЯ МЕНЮ ==========
+  // ========== МЕНЮ ==========
   menuButton.addEventListener('click', () => menuPanel.classList.add('open'));
   menuCloseBtn.addEventListener('click', () => menuPanel.classList.remove('open'));
 
@@ -1068,13 +1109,11 @@
 
   document.getElementById('sizeSlider').addEventListener('input', (e) => {
     settings.size = parseInt(e.target.value);
-    dogVideo.style.width = (settings.size / 100 * 130) + 'px';
     document.getElementById('sizeValue').textContent = settings.size + '%';
     saveVisualSettings();
   });
   document.getElementById('opacitySlider').addEventListener('input', (e) => {
     settings.opacity = parseInt(e.target.value);
-    dogVideo.style.opacity = settings.opacity / 100;
     document.getElementById('opacityValue').textContent = settings.opacity + '%';
     saveVisualSettings();
   });
@@ -1083,7 +1122,7 @@
     saveVisualSettings();
   });
 
-  // ========== ИНИЦИАЛИЗАЦИЯ ЛЕЖАНКИ ==========
+  // ========== ИНИЦИАЛИЗАЦИЯ ==========
   function initBed() {
     const savedBed = JSON.parse(localStorage.getItem('spitz_bed') || '{}');
     pomeranian.bedX = savedBed.x || (width - 200);
@@ -1095,7 +1134,19 @@
     localStorage.setItem('spitz_bed', JSON.stringify({ x: pomeranian.bedX, y: pomeranian.bedY }));
   });
 
-  // ========== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ==========
+  function resizeCanvas() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // ========== ЗАПУСК ИГРОВОГО ЦИКЛА ==========
   let lastFrameTime = performance.now();
   function gameLoop() {
     const now = performance.now();
@@ -1104,35 +1155,28 @@
 
     updateNeeds(dt);
     decideNextState();
-
     if (!pomeranian.isDragged && !pomeranian.isSleeping) updateMoveToTarget();
     updateAnimationByState();
     updateFacing();
     if (!pomeranian.isSleeping && (Math.abs(pomeranian.vx) > 0.5 || pomeranian.isMovingToTarget)) addPawPrint();
     spontaneousActions();
 
-    // Живое движение (скорость для анимаций)
     pomeranian.vx = (pomeranian.targetX || pomeranian.x) ? (pomeranian.targetX - pomeranian.x) * 0.05 : 0;
     pomeranian.vy = (pomeranian.targetY || pomeranian.y) ? (pomeranian.targetY - pomeranian.y) * 0.05 : 0;
 
-    dogVideo.style.left = pomeranian.x + 'px';
-    dogVideo.style.top = pomeranian.y + 'px';
-    bubble.style.left = (pomeranian.x-40)+'px';
-    bubble.style.top = (pomeranian.y-110)+'px';
-    ctx.clearRect(0,0,width,height);
+    ctx.clearRect(0, 0, width, height);
     drawPawPrints();
     drawDroppedMemes();
     drawBall();
     drawParticles();
+    drawDogOnCanvas();
+
+    bubble.style.left = (pomeranian.x - 40) + 'px';
+    bubble.style.top = (pomeranian.y - 110) + 'px';
+
     requestAnimationFrame(gameLoop);
   }
 
-  // Деградация привязанности со временем
-  setInterval(() => {
-    pomeranian.bond = clamp(pomeranian.bond - 0.002, 0, 1);
-  }, 5000);
-
-  // Спавн мяча
   spawnBall();
   setInterval(() => {
     if (!pomeranian.ball.active && !pomeranian.carryingBall && Math.random() < 0.3) {
@@ -1140,33 +1184,13 @@
     }
   }, 10000);
 
-  // Размер канваса
-  window.addEventListener('resize', () => {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    canvas.width = width * window.devicePixelRatio;
-    canvas.height = height * window.devicePixelRatio;
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  });
-  // Первоначальная установка размеров
-  width = window.innerWidth;
-  height = window.innerHeight;
-  canvas.width = width * window.devicePixelRatio;
-  canvas.height = height * window.devicePixelRatio;
-  canvas.style.width = width + 'px';
-  canvas.style.height = height + 'px';
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-  // Старт
   loadConfig().then(() => {
     loadVisualSettings();
     initBed();
     updateMoodDisplay();
     updateSleepDisplay();
     gameLoop();
-    setTimeout(() => showBubble('Привет! Я Майбах — живой и с характером.', 4000), 500);
+    setTimeout(() => showBubble('Привет! Я Майбах — прозрачный и живой!', 4000), 500);
   });
 
 })();
