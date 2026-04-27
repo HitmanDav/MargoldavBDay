@@ -9,11 +9,11 @@
     body {
       margin: 0; min-height: 100vh;
       background: radial-gradient(circle at 20% 20%, #2b3a4a, #1a1f2c);
-      overflow: hidden; touch-action: none;
+      overflow: hidden;
       font-family: 'Segoe UI', system-ui, sans-serif;
       cursor: default;
     }
-    #canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+    #canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
     #dogVideo {
       position: absolute; top: -9999px; left: -9999px;
       width: 1px; height: 1px;
@@ -49,6 +49,7 @@
       transition: left 0.1s, top 0.1s;
       border: 3px solid #D2B48C;
       box-sizing: content-box;
+      touch-action: none;
     }
     #dogBed:active { cursor: grabbing; }
     #menuButton, #sleepToggleButton {
@@ -59,6 +60,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 28px; color: white; z-index: 400; cursor: pointer;
       transition: transform 0.1s;
+      touch-action: manipulation;
     }
     #menuButton { right: 20px; }
     #sleepToggleButton { right: 80px; display: none; }
@@ -72,11 +74,13 @@
       padding: 80px 20px 20px;
       overflow-y: auto;
       border-left: 2px solid #ffb347;
+      touch-action: auto; /* Разрешаем скролл меню */
     }
     #menuPanel.open { transform: translateX(0); }
     #menuCloseBtn {
       position: absolute; top: 20px; right: 20px;
       background: none; border: none; color: white; font-size: 30px; cursor: pointer;
+      touch-action: manipulation;
     }
     .menu-section { margin-bottom: 20px; }
     .menu-section h3 { color: #ffd966; margin: 0 0 10px; font-size: 18px; }
@@ -86,13 +90,14 @@
       color: white; font-size: 22px; min-width: 50px; height: 50px;
       border-radius: 15px; display: flex; align-items: center; justify-content: center;
       cursor: pointer; transition: 0.15s; padding: 0 10px;
+      touch-action: manipulation;
     }
     .menu-btn:active { transform: scale(0.9); background: #ffb347; }
     #textInputMenu {
       flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ffb347;
       background: rgba(0,0,0,0.5); color: white; outline: none;
     }
-    .setting-slider { width: 100%; margin: 5px 0; }
+    .setting-slider { width: 100%; margin: 5px 0; touch-action: manipulation; }
     .setting-label { color: #ccc; font-size: 14px; display: flex; justify-content: space-between; }
     .state-item { color: #fff; font-size: 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 
@@ -102,6 +107,7 @@
       background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
       z-index: 600; display: none; align-items: center; justify-content: center;
       flex-direction: column;
+      touch-action: auto; /* разрешаем тач внутри окна */
     }
     #gameModal.active { display: flex; }
     #gameContainer {
@@ -129,6 +135,7 @@
       display: flex; align-items: center; justify-content: center;
       cursor: pointer;
       transition: background 0.2s;
+      touch-action: manipulation;
     }
     .ttt-cell:hover { background: rgba(255,179,71,0.3); }
     .ttt-cell.X { color: #FF6B6B; }
@@ -139,6 +146,7 @@
       padding: 10px 25px; border-radius: 25px;
       font-size: 16px; font-weight: bold; cursor: pointer;
       margin: 5px; transition: transform 0.1s;
+      touch-action: manipulation;
     }
     #newGameBtn:active, #closeGameBtn:active { transform: scale(0.95); }
     @media (max-width: 600px) {
@@ -1116,18 +1124,25 @@
     pomeranian.bond = clamp(pomeranian.bond - 0.002, 0, 1);
   }, 5000);
 
-  // ========== ПЕРЕТАСКИВАНИЕ ЛЕЖАНКИ ==========
-  function updateMouse(clientX, clientY) { mouseX = clientX; mouseY = clientY; }
-  window.addEventListener('mousemove', (e) => updateMouse(e.clientX, e.clientY));
-  window.addEventListener('touchmove', (e) => {
+  // ========== ОБНОВЛЕНИЕ КООРДИНАТ МЫШИ/ТАЧА (без блокировки интерфейса) ==========
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX; mouseY = e.clientY;
+  });
+
+  // Для тач-событий используем только canvas, чтобы не мешать меню и игре
+  canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY);
-  }, {passive: false});
-  window.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const t = e.touches[0]; if (t) updateMouse(t.clientX, t.clientY);
+    const t = e.touches[0];
+    if (t) { mouseX = t.clientX; mouseY = t.clientY; }
   }, {passive: false});
 
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    if (t) { mouseX = t.clientX; mouseY = t.clientY; }
+  }, {passive: false});
+
+  // ========== ПЕРЕТАСКИВАНИЕ ЛЕЖАНКИ (остаётся на dogBed) ==========
   dogBed.addEventListener('mousedown', (e) => {
     e.stopPropagation();
     pomeranian.bedDragged = true;
@@ -1169,20 +1184,20 @@
   window.addEventListener('touchend', () => { pomeranian.bedDragged = false; });
 
   // ========== ЗАХВАТ ПСА ==========
-  window.addEventListener('mousedown', (e) => {
-    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton') || e.target.closest('#gameModal')) return;
+  canvas.addEventListener('mousedown', (e) => {
     handleDragStart(e.clientX, e.clientY);
   });
-  window.addEventListener('mousemove', (e) => handleDragMove(e.clientX, e.clientY));
+  canvas.addEventListener('mousemove', (e) => handleDragMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', handleDragEnd);
-  window.addEventListener('touchstart', (e) => {
-    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton') || e.target.closest('#gameModal')) return;
+  canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    const t = e.touches[0]; handleDragStart(t.clientX, t.clientY);
+    const t = e.touches[0];
+    handleDragStart(t.clientX, t.clientY);
   }, {passive: false});
-  window.addEventListener('touchmove', (e) => {
+  canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
-    const t = e.touches[0]; handleDragMove(t.clientX, t.clientY);
+    const t = e.touches[0];
+    handleDragMove(t.clientX, t.clientY);
   }, {passive: false});
   window.addEventListener('touchend', handleDragEnd);
 
@@ -1246,9 +1261,9 @@
   let gameOver = false;
 
   const winPatterns = [
-    [0,1,2], [3,4,5], [6,7,8], // строки
-    [0,3,6], [1,4,7], [2,5,8], // столбцы
-    [0,4,8], [2,4,6]           // диагонали
+    [0,1,2], [3,4,5], [6,7,8],
+    [0,3,6], [1,4,7], [2,5,8],
+    [0,4,8], [2,4,6]
   ];
 
   function renderBoard() {
@@ -1327,22 +1342,13 @@
     for (const pattern of winPatterns) {
       const [a, b, c] = pattern;
       if (gameBoard[a] === 'O' && gameBoard[b] === 'O' && gameBoard[c] === '') {
-        makeMove(c, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(c, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
       if (gameBoard[a] === 'O' && gameBoard[c] === 'O' && gameBoard[b] === '') {
-        makeMove(b, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(b, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
       if (gameBoard[b] === 'O' && gameBoard[c] === 'O' && gameBoard[a] === '') {
-        makeMove(a, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(a, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
     }
 
@@ -1350,31 +1356,19 @@
     for (const pattern of winPatterns) {
       const [a, b, c] = pattern;
       if (gameBoard[a] === 'X' && gameBoard[b] === 'X' && gameBoard[c] === '') {
-        makeMove(c, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(c, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
       if (gameBoard[a] === 'X' && gameBoard[c] === 'X' && gameBoard[b] === '') {
-        makeMove(b, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(b, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
       if (gameBoard[b] === 'X' && gameBoard[c] === 'X' && gameBoard[a] === '') {
-        makeMove(a, 'O');
-        currentPlayer = 'X';
-        updateGameMessage('Твой ход!');
-        return;
+        makeMove(a, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
       }
     }
 
     // Центр
     if (gameBoard[4] === '') {
-      makeMove(4, 'O');
-      currentPlayer = 'X';
-      updateGameMessage('Твой ход!');
-      return;
+      makeMove(4, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
     }
 
     // Случайный ход
@@ -1459,7 +1453,6 @@
         enableEffects = false;
         settings.showPrints = false;
         document.getElementById('perfModeIndicator').style.display = 'block';
-        console.warn('Автоматическое отключение эффектов из-за низкого FPS');
       } else if (averageFPS > 40 && !enableEffects && !isLowPerformance) {
         enableEffects = true;
         settings.showPrints = document.getElementById('showPrintsCheck').checked;
