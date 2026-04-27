@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
-  <title>🐕 Майбах | Живой Шпиц</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover, shrink-to-fit=yes">
+  <title>🐕 Майбах | Живой Шпиц с Играми</title>
   <style>
     * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
     body {
@@ -51,14 +51,18 @@
       box-sizing: content-box;
     }
     #dogBed:active { cursor: grabbing; }
-    #menuButton {
-      position: fixed; top: 20px; right: 20px;
+    #menuButton, #sleepToggleButton {
+      position: fixed; top: 20px;
       width: 50px; height: 50px;
       background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
       border-radius: 15px; border: 2px solid #ffb347;
       display: flex; align-items: center; justify-content: center;
       font-size: 28px; color: white; z-index: 400; cursor: pointer;
+      transition: transform 0.1s;
     }
+    #menuButton { right: 20px; }
+    #sleepToggleButton { right: 80px; display: none; }
+    #menuButton:active, #sleepToggleButton:active { transform: scale(0.9); }
     #menuPanel {
       position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
       background: rgba(20,20,35,0.95); backdrop-filter: blur(12px);
@@ -76,12 +80,12 @@
     }
     .menu-section { margin-bottom: 20px; }
     .menu-section h3 { color: #ffd966; margin: 0 0 10px; font-size: 18px; }
-    .menu-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
+    .menu-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
     .menu-btn {
       background: rgba(30,30,46,0.8); border: 2px solid #ffb347;
-      color: white; font-size: 22px; width: 50px; height: 50px;
+      color: white; font-size: 22px; min-width: 50px; height: 50px;
       border-radius: 15px; display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: 0.15s;
+      cursor: pointer; transition: 0.15s; padding: 0 10px;
     }
     .menu-btn:active { transform: scale(0.9); background: #ffb347; }
     #textInputMenu {
@@ -91,8 +95,63 @@
     .setting-slider { width: 100%; margin: 5px 0; }
     .setting-label { color: #ccc; font-size: 14px; display: flex; justify-content: space-between; }
     .state-item { color: #fff; font-size: 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+
+    /* Модальное окно игры */
+    #gameModal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+      z-index: 600; display: none; align-items: center; justify-content: center;
+      flex-direction: column;
+    }
+    #gameModal.active { display: flex; }
+    #gameContainer {
+      background: rgba(30,30,46,0.95);
+      border: 2px solid #ffb347;
+      border-radius: 20px;
+      padding: 20px;
+      text-align: center;
+      max-width: 90vw;
+    }
+    #gameTitle { color: #ffd966; font-size: 24px; margin-bottom: 15px; }
+    #ticTacToeBoard {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      grid-template-rows: repeat(3, 80px);
+      gap: 5px;
+      margin: 0 auto;
+    }
+    .ttt-cell {
+      background: rgba(255,255,255,0.1);
+      border: 2px solid #ffb347;
+      border-radius: 10px;
+      font-size: 40px;
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .ttt-cell:hover { background: rgba(255,179,71,0.3); }
+    .ttt-cell.X { color: #FF6B6B; }
+    .ttt-cell.O { color: #4ECDC4; }
+    #gameMessage { color: white; margin: 15px 0; font-size: 18px; min-height: 27px; }
+    #newGameBtn, #closeGameBtn {
+      background: #ffb347; border: none; color: #1e1e2f;
+      padding: 10px 25px; border-radius: 25px;
+      font-size: 16px; font-weight: bold; cursor: pointer;
+      margin: 5px; transition: transform 0.1s;
+    }
+    #newGameBtn:active, #closeGameBtn:active { transform: scale(0.95); }
     @media (max-width: 600px) {
       #menuPanel { width: 100%; }
+      #speechBubble { max-width: 200px; font-size: 14px; }
+      .menu-btn { min-width: 44px; height: 44px; font-size: 20px; }
+      #menuButton, #sleepToggleButton { width: 44px; height: 44px; font-size: 24px; }
+      #sleepToggleButton { right: 70px; }
+      #ticTacToeBoard { grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); }
+      .ttt-cell { font-size: 30px; }
+    }
+    @media (max-width: 400px) {
+      #dogBed { width: 120px; height: 80px; font-size: 40px; }
     }
   </style>
 </head>
@@ -107,6 +166,19 @@
 </video>
 <div id="dogBed">🛏️</div>
 <div id="menuButton">☰</div>
+<div id="sleepToggleButton" title="Сон/Пробуждение">😴</div>
+
+<!-- Модальное окно игры -->
+<div id="gameModal">
+  <div id="gameContainer">
+    <div id="gameTitle">🎮 Крестики-нолики с Майбахом</div>
+    <div id="ticTacToeBoard"></div>
+    <div id="gameMessage"></div>
+    <button id="newGameBtn">🔄 Новая игра</button>
+    <button id="closeGameBtn">✕ Закрыть</button>
+  </div>
+</div>
+
 <div id="menuPanel">
   <button id="menuCloseBtn">✕</button>
 
@@ -115,10 +187,19 @@
     <div class="state-item"><span id="moodStateIcon">😊</span> <span id="moodStateText">Счастливый</span></div>
     <div class="state-item">💤 Статус сна: <span id="sleepStateText">Нет</span></div>
     <div class="state-item">🎲 Действий: <span id="actionStateCount">0</span></div>
+    <div class="state-item" id="perfModeIndicator" style="display:none;">📱 Режим: эконом</div>
   </div>
 
   <div class="menu-section">
-    <h3>🎮 Управление</h3>
+    <h3>🎮 Игры</h3>
+    <div class="menu-row">
+      <button class="menu-btn" id="tictactoeBtn" title="Крестики-нолики">❌⭕</button>
+      <span style="color:#ccc; font-size:14px;">Крестики-нолики</span>
+    </div>
+  </div>
+
+  <div class="menu-section">
+    <h3>🎤 Управление</h3>
     <div class="menu-row">
       <button class="menu-btn" id="voiceBtnMenu" title="Голос">🎤</button>
       <input type="text" id="textInputMenu" placeholder="Спросить..." enterkeyhint="send">
@@ -147,18 +228,66 @@
 (function(){
   "use strict";
 
-  // ========== НАСТРОЙКИ ВИЗУАЛА ==========
+  // ========== ОПРЕДЕЛЕНИЕ УСТРОЙСТВА ==========
+  const UA = navigator.userAgent;
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(UA);
+  const isIOS = /iPhone|iPad|iPod/.test(UA);
+  const isAndroid = /Android/.test(UA);
+  let deviceModel = 'unknown';
+  let deviceBrand = 'unknown';
+
+  if (isAndroid) {
+    const match = UA.match(/Android\s[\d.]+;\s([^;)]+)/);
+    if (match) deviceModel = match[1].trim();
+  } else if (isIOS) {
+    const match = UA.match(/iPhone(\d+,\d+)|iPad(\d+,\d+)/);
+    if (match) deviceModel = match[0];
+  }
+
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(['model', 'brands']).then(data => {
+      if (data.model) deviceModel = data.model;
+      if (data.brands && data.brands.length) deviceBrand = data.brands[0].brand;
+    }).catch(() => {});
+  }
+
+  const deviceMemory = navigator.deviceMemory || 4;
+  const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+  const isLowPerformance = isMobile && (deviceMemory < 4 || hardwareConcurrency < 4);
+  let enableEffects = !isLowPerformance;
+
+  // Проверка поддержки прозрачного видео
+  let supportsAlphaVideo = true;
+  const testVideo = document.createElement('video');
+  testVideo.muted = true;
+  testVideo.playsInline = true;
+  testVideo.src = 'animations/walk.webm';
+  testVideo.addEventListener('loadeddata', () => {
+    const testCanvas = document.createElement('canvas');
+    testCanvas.width = 2; testCanvas.height = 2;
+    const ctx = testCanvas.getContext('2d');
+    testVideo.currentTime = 0.1;
+    testVideo.addEventListener('seeked', () => {
+      ctx.drawImage(testVideo, 0, 0, 2, 2);
+      const pixel = ctx.getImageData(0, 0, 1, 1).data;
+      if (pixel[3] === 255) supportsAlphaVideo = false;
+    });
+    testVideo.currentTime = 0;
+  });
+  testVideo.load();
+
+  // ========== ХРАНЕНИЕ НАСТРОЕК ==========
   const STORAGE_KEY = 'spitz_visual';
-  let settings = {
-    size: 100,
-    opacity: 100,
-    showPrints: true
-  };
+  let settings = { size: 100, opacity: 100, showPrints: true };
 
   function loadVisualSettings() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try { Object.assign(settings, JSON.parse(saved)); } catch(e) {}
+    }
+    if (isLowPerformance) {
+      settings.showPrints = false;
+      document.getElementById('perfModeIndicator').style.display = 'block';
     }
     applyVisualSettings();
   }
@@ -175,7 +304,7 @@
     document.getElementById('opacityValue').textContent = settings.opacity + '%';
   }
 
-  // ========== ХАРАКТЕР (детерминирован) ==========
+  // ========== ХАРАКТЕР ==========
   const PERSONALITY = {
     playfulness: 0.7,
     stubbornness: 0.3,
@@ -231,6 +360,7 @@
   const ctx = canvas.getContext('2d');
   const dogBed = document.getElementById('dogBed');
   const menuButton = document.getElementById('menuButton');
+  const sleepToggleButton = document.getElementById('sleepToggleButton');
   const menuPanel = document.getElementById('menuPanel');
   const menuCloseBtn = document.getElementById('menuCloseBtn');
   const voiceBtnMenu = document.getElementById('voiceBtnMenu');
@@ -243,8 +373,18 @@
   const moodStateText = document.getElementById('moodStateText');
   const sleepStateText = document.getElementById('sleepStateText');
   const actionStateCount = document.getElementById('actionStateCount');
+  const gameModal = document.getElementById('gameModal');
+  const ticTacToeBoard = document.getElementById('ticTacToeBoard');
+  const newGameBtn = document.getElementById('newGameBtn');
+  const closeGameBtn = document.getElementById('closeGameBtn');
+  const gameMessage = document.getElementById('gameMessage');
 
-  // ========== АНИМАЦИИ (ПУТИ К WEBM ДЛЯ ПРОЗРАЧНОСТИ) ==========
+  if (isMobile) {
+    sleepToggleButton.style.display = 'flex';
+    sleepBtnMenu.style.display = 'none';
+  }
+
+  // ========== АНИМАЦИИ ==========
   const ANIM = {
     idle:    { src: null,                      type: 'poster' },
     walk:    { src: 'animations/walk.webm',    type: 'video', rate: 1.0 },
@@ -254,6 +394,12 @@
     looking_back: { src: 'animations/looking_back.webm', type: 'video', rate: 1.0, once: true },
     sneeze:  { src: 'animations/sneeze.webm',  type: 'video', rate: 2.0, once: true },
   };
+
+  if (!supportsAlphaVideo) {
+    for (const key in ANIM) {
+      if (ANIM[key].type === 'video') ANIM[key].type = 'poster';
+    }
+  }
 
   // ========== ФРАЗЫ ==========
   const angryWakeUpPhrases = [
@@ -275,22 +421,14 @@
 
   // ========== FSM И ПОТРЕБНОСТИ ==========
   const STATE = {
-    IDLE: 'IDLE',
-    WANDER: 'WANDER',
-    FOLLOW: 'FOLLOW',
-    FETCH: 'FETCH',
-    SLEEP: 'SLEEP',
-    DRAG: 'DRAG'
+    IDLE: 'IDLE', WANDER: 'WANDER', FOLLOW: 'FOLLOW',
+    FETCH: 'FETCH', SLEEP: 'SLEEP', DRAG: 'DRAG'
   };
 
   let currentState = STATE.IDLE;
   let stateLocked = false;
   let lastDecisionTime = 0;
-  let needs = {
-    energy: 0.8,
-    fun: 0.7,
-    social: 0.6
-  };
+  let needs = { energy: 0.8, fun: 0.7, social: 0.6 };
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -309,10 +447,8 @@
 
   function updateMoodDisplay() {
     const moods = {
-      calm: '😌 Спокойный',
-      happy: '😊 Счастливый',
-      tired: '😴 Уставший',
-      angry: '😠 Злой'
+      calm: '😌 Спокойный', happy: '😊 Счастливый',
+      tired: '😴 Уставший', angry: '😠 Злой'
     };
     const mood = pomeranian.mood;
     const text = moods[mood] || '😌 Спокойный';
@@ -324,6 +460,9 @@
   function updateSleepDisplay() {
     sleepStateText.textContent = pomeranian.isSleeping ? 'Да (😴)' : 'Нет (бодрствует)';
     sleepStateText.style.color = pomeranian.isSleeping ? '#FFB347' : 'inherit';
+    if (isMobile) {
+      sleepToggleButton.textContent = pomeranian.isSleeping ? '😴' : '🐕';
+    }
   }
 
   function incrementAction() {
@@ -334,18 +473,13 @@
   // ========== ЭМОЦИИ ==========
   function updateEmotion() {
     const now = Date.now();
-    if (pomeranian.isSleeping) {
-      pomeranian.emotion = 'sleepy';
-      return;
-    }
+    if (pomeranian.isSleeping) { pomeranian.emotion = 'sleepy'; return; }
     if (now - pomeranian.memory.lastPetTime < 5000) {
-      pomeranian.emotion = 'happy';
-      pomeranian.bond += 0.01;
+      pomeranian.emotion = 'happy'; pomeranian.bond += 0.01;
     } else if (now - pomeranian.memory.lastPlayTime < 8000) {
       pomeranian.emotion = 'excited';
     } else if (now - pomeranian.memory.lastIgnoreTime > 15000) {
-      pomeranian.emotion = 'bored';
-      pomeranian.bond -= 0.005;
+      pomeranian.emotion = 'bored'; pomeranian.bond -= 0.005;
     }
     pomeranian.bond = clamp(pomeranian.bond, 0, 1);
   }
@@ -368,27 +502,16 @@
     stateLocked = true;
     updateEmotion();
 
-    if (needs.energy < 0.2 || pomeranian.emotion === 'sleepy') {
-      return setState(STATE.SLEEP);
-    }
-    if (pomeranian.emotion === 'bored' && Math.random() < 0.6) {
-      return setState(STATE.FOLLOW);
-    }
-    if (pomeranian.emotion === 'excited' && pomeranian.ball.active) {
-      return setState(STATE.FETCH);
-    }
-    if (Math.random() < pomeranian.bond) {
-      return setState(STATE.FOLLOW);
-    }
+    if (needs.energy < 0.2 || pomeranian.emotion === 'sleepy') return setState(STATE.SLEEP);
+    if (pomeranian.emotion === 'bored' && Math.random() < 0.6) return setState(STATE.FOLLOW);
+    if (pomeranian.emotion === 'excited' && pomeranian.ball.active) return setState(STATE.FETCH);
+    if (Math.random() < pomeranian.bond) return setState(STATE.FOLLOW);
     return setState(STATE.WANDER);
   }
 
   // ========== GO TO ==========
   function goTo(targetX, targetY, duration, nextState) {
-    if (pomeranian.isDragged || pomeranian.isSleeping) {
-      stateLocked = false;
-      return;
-    }
+    if (pomeranian.isDragged || pomeranian.isSleeping) { stateLocked = false; return; }
     pomeranian.isMovingToTarget = true;
     pomeranian.targetX = targetX;
     pomeranian.targetY = targetY;
@@ -398,11 +521,8 @@
     pomeranian.moveStartY = pomeranian.y;
     pomeranian.onMoveComplete = () => {
       pomeranian.isMovingToTarget = false;
-      if (nextState) {
-        setState(nextState);
-      } else {
-        stateLocked = false;
-      }
+      if (nextState) setState(nextState);
+      else stateLocked = false;
     };
   }
 
@@ -446,16 +566,10 @@
         goTo(mouseX, mouseY, 2000, STATE.IDLE);
         break;
       case STATE.FETCH:
-        if (!pomeranian.ball.active) {
-          stateLocked = false;
-          return;
-        }
+        if (!pomeranian.ball.active) { stateLocked = false; return; }
         goTo(pomeranian.ball.x, pomeranian.ball.y, 1500, null);
         pomeranian.onMoveComplete = () => {
-          if (!pomeranian.ball.active) {
-            stateLocked = false;
-            return;
-          }
+          if (!pomeranian.ball.active) { stateLocked = false; return; }
           pomeranian.ball.active = false;
           goTo(mouseX, mouseY, 2000, null);
           pomeranian.onMoveComplete = () => {
@@ -486,12 +600,8 @@
   // ========== МИКРО-ДЕЙСТВИЯ ==========
   function spontaneousActions() {
     if (pomeranian.isSleeping || pomeranian.isDragged || pomeranian.isMovingToTarget) return;
-    if (Math.random() < 0.002) {
-      setAnimation('looking_back');
-    }
-    if (Math.random() < 0.002) {
-      setAnimation('sneeze');
-    }
+    if (Math.random() < 0.002) setAnimation('looking_back');
+    if (Math.random() < 0.002) setAnimation('sneeze');
   }
 
   // ========== ОБРАБОТЧИКИ ЗАХВАТА ==========
@@ -569,9 +679,7 @@
     setAnimation('sleep');
     showBubble('😴 Хррр...', 2000);
     playSnore();
-    if (!pomeranian.facingRight) {
-      pomeranian.facingRight = true;
-    }
+    if (!pomeranian.facingRight) pomeranian.facingRight = true;
     const bedCenterX = pomeranian.bedX + 80;
     const bedCenterY = pomeranian.bedY + 50;
     pomeranian.x = bedCenterX;
@@ -611,9 +719,22 @@
   }
 
   // ========== ЗВУКИ ==========
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  let lastUserGesture = false;
+  function onUserGesture() { lastUserGesture = true; }
+  document.addEventListener('touchstart', onUserGesture, {passive: true});
+  document.addEventListener('mousedown', onUserGesture);
+
   function playSnore() {
+    if (!enableEffects || (isMobile && !lastUserGesture)) return;
     try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const ac = getAudioContext();
       const osc = ac.createOscillator(); osc.type='sawtooth';
       osc.frequency.setValueAtTime(120, ac.currentTime);
       osc.frequency.exponentialRampToValueAtTime(80, ac.currentTime+0.5);
@@ -622,9 +743,11 @@
       osc.connect(g).connect(ac.destination); osc.start(); osc.stop(ac.currentTime+0.8);
     } catch(e){}
   }
+
   function playBark() {
+    if (!enableEffects) return;
     try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const ac = getAudioContext();
       const osc = ac.createOscillator(); osc.type='triangle';
       osc.frequency.setValueAtTime(700, ac.currentTime);
       osc.frequency.exponentialRampToValueAtTime(400, ac.currentTime+0.15);
@@ -634,9 +757,11 @@
       if (!pomeranian.isSleeping) showBubble('ГАВ!', 1000);
     } catch(e){}
   }
+
   function playAngryBark() {
+    if (!enableEffects) return;
     try {
-      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      const ac = getAudioContext();
       const osc = ac.createOscillator(); osc.type='sawtooth';
       osc.frequency.setValueAtTime(300, ac.currentTime);
       osc.frequency.exponentialRampToValueAtTime(150, ac.currentTime+0.3);
@@ -664,6 +789,7 @@
 
   // ========== МЕМЫ ==========
   function dropRandomMeme() {
+    if (!enableEffects) { showBubble('Не хочу мемы', 1500); return; }
     const list = ['1.jpg','2.png','3.gif'];
     const name = list[Math.floor(Math.random()*list.length)];
     const img = new Image(); img.src = 'memes/'+name;
@@ -678,6 +804,7 @@
   }
 
   function drawDroppedMemes() {
+    if (!enableEffects) return;
     const now = Date.now();
     for (let i = pomeranian.droppedMemes.length-1; i >= 0; i--) {
       const m = pomeranian.droppedMemes[i];
@@ -697,6 +824,7 @@
   }
 
   function drawParticles() {
+    if (!enableEffects) return;
     for (let i=particles.length-1; i>=0; i--) {
       const p = particles[i];
       p.life -= 0.016;
@@ -728,7 +856,7 @@
   }
 
   function addPawPrint() {
-    if (!settings.showPrints) return;
+    if (!settings.showPrints || !enableEffects) return;
     const now = Date.now();
     if (now - lastPawPrintTime < 300) return;
     lastPawPrintTime = now;
@@ -738,7 +866,7 @@
   }
 
   function drawPawPrints() {
-    if (!settings.showPrints) return;
+    if (!settings.showPrints || !enableEffects) return;
     const now = Date.now();
     pomeranian.pawPrints = pomeranian.pawPrints.filter(p => now - p.time < 8000);
     for (const p of pomeranian.pawPrints) {
@@ -761,6 +889,7 @@
   }
 
   function createExplosion(x, y) {
+    if (!enableEffects) return;
     for (let i=0; i<12; i++) {
       const angle = (Math.PI*2 * i) / 12;
       const speed = 2 + Math.random() * 4;
@@ -786,7 +915,7 @@
       return;
     }
     pomeranian.currentAnim = animName;
-    if (anim.type === 'poster') {
+    if (anim.type === 'poster' || !supportsAlphaVideo) {
       dogVideo.pause();
       dogVideo.currentTime = 0;
     } else {
@@ -821,14 +950,11 @@
     if (pomeranian.isSleeping) return;
     const movingRight = pomeranian.vx > 0.1 || (pomeranian.isMovingToTarget && pomeranian.targetX > pomeranian.x);
     const movingLeft = pomeranian.vx < -0.1 || (pomeranian.isMovingToTarget && pomeranian.targetX < pomeranian.x);
-    if (movingRight && !pomeranian.facingRight) {
-      pomeranian.facingRight = true;
-    } else if (movingLeft && pomeranian.facingRight) {
-      pomeranian.facingRight = false;
-    }
+    if (movingRight && !pomeranian.facingRight) pomeranian.facingRight = true;
+    else if (movingLeft && pomeranian.facingRight) pomeranian.facingRight = false;
   }
 
-  // ========== ОТРИСОВКА ПСА НА КАНВАСЕ ==========
+  // ========== ОТРИСОВКА ПСА ==========
   function drawDogOnCanvas() {
     const dogWidth = dogVideo.videoWidth || 130;
     const dogHeight = dogVideo.videoHeight || 130;
@@ -838,7 +964,7 @@
     const x = pomeranian.x - drawWidth / 2;
     const y = pomeranian.y - drawHeight / 2;
 
-    if (pomeranian.currentAnim === 'idle') {
+    if (pomeranian.currentAnim === 'idle' || !supportsAlphaVideo) {
       const poster = new Image();
       poster.src = 'animations/start.png';
       if (poster.complete) {
@@ -889,10 +1015,7 @@
 
   async function askAI(userMessage) {
     const apiKey = getCurrentApiKey();
-    if (!apiKey) {
-      showBubble('Нет ключа API', 3000);
-      return;
-    }
+    if (!apiKey) { showBubble('Нет ключа API', 3000); return; }
     const model = CONFIG.models?.[0] || 'google/gemma-4-31b-it:free';
     const systemPrompt = CONFIG.systemPrompt || 'Ты — белый шпиц Майбах. Твоя хозяйка — Соня.';
     const moodContext = `Настроение: ${pomeranian.emotion}, привязанность: ${pomeranian.bond.toFixed(2)}`;
@@ -900,10 +1023,7 @@
     let retries = 0;
     const MAX_RETRIES = 5;
     async function attempt() {
-      if (retries++ > MAX_RETRIES) {
-        showBubble('ИИ устал 😢');
-        return;
-      }
+      if (retries++ > MAX_RETRIES) { showBubble('ИИ устал 😢'); return; }
       try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -945,10 +1065,7 @@
   }
 
   function handleUserMessage(message) {
-    if (pomeranian.isSleeping) {
-      showBubble('Я сплю...', 1000);
-      return;
-    }
+    if (pomeranian.isSleeping) { showBubble('Я сплю...', 1000); return; }
     pomeranian.memory.lastInteraction = 'talk';
     pomeranian.memory.lastIgnoreTime = Date.now();
     pomeranian.bond += 0.01;
@@ -1053,13 +1170,13 @@
 
   // ========== ЗАХВАТ ПСА ==========
   window.addEventListener('mousedown', (e) => {
-    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton')) return;
+    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton') || e.target.closest('#gameModal')) return;
     handleDragStart(e.clientX, e.clientY);
   });
   window.addEventListener('mousemove', (e) => handleDragMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', handleDragEnd);
   window.addEventListener('touchstart', (e) => {
-    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton')) return;
+    if (e.target === dogBed || e.target.closest('#menuPanel') || e.target.closest('#menuButton') || e.target.closest('#gameModal')) return;
     e.preventDefault();
     const t = e.touches[0]; handleDragStart(t.clientX, t.clientY);
   }, {passive: false});
@@ -1122,44 +1239,254 @@
     saveVisualSettings();
   });
 
+  // ========== ИГРА: КРЕСТИКИ-НОЛИКИ ==========
+  let gameBoard = ['', '', '', '', '', '', '', '', ''];
+  let gameActive = false;
+  let currentPlayer = 'X'; // Игрок всегда X, Майбах — O
+  let gameOver = false;
+
+  const winPatterns = [
+    [0,1,2], [3,4,5], [6,7,8], // строки
+    [0,3,6], [1,4,7], [2,5,8], // столбцы
+    [0,4,8], [2,4,6]           // диагонали
+  ];
+
+  function renderBoard() {
+    ticTacToeBoard.innerHTML = '';
+    gameBoard.forEach((cell, index) => {
+      const cellDiv = document.createElement('div');
+      cellDiv.className = 'ttt-cell';
+      if (cell === 'X') cellDiv.classList.add('X');
+      if (cell === 'O') cellDiv.classList.add('O');
+      cellDiv.textContent = cell;
+      cellDiv.addEventListener('click', () => handleCellClick(index));
+      ticTacToeBoard.appendChild(cellDiv);
+    });
+  }
+
+  function handleCellClick(index) {
+    if (!gameActive || gameOver) return;
+    if (gameBoard[index] !== '') return;
+    if (currentPlayer !== 'X') return;
+
+    makeMove(index, 'X');
+    if (!gameOver) {
+      currentPlayer = 'O';
+      updateGameMessage('Майбах думает... 🤔');
+      setTimeout(maybachMove, 800 + Math.random() * 1200);
+    }
+  }
+
+  function makeMove(index, player) {
+    gameBoard[index] = player;
+    renderBoard();
+    checkGameResult();
+  }
+
+  function checkGameResult() {
+    for (const pattern of winPatterns) {
+      const [a, b, c] = pattern;
+      if (gameBoard[a] && gameBoard[a] === gameBoard[b] && gameBoard[a] === gameBoard[c]) {
+        gameOver = true;
+        gameActive = false;
+        const winner = gameBoard[a];
+        if (winner === 'X') {
+          updateGameMessage('Ты выиграл! Майбах недоволен 😠');
+          pomeranian.mood = 'angry';
+          updateMoodDisplay();
+          showBubble('Ты выиграл! Но я ещё отыграюсь!', 4000);
+          playAngryBark();
+        } else {
+          updateGameMessage('Майбах выиграл! Гав-гав! 🐕');
+          needs.fun += 0.3;
+          pomeranian.memory.lastPlayTime = Date.now();
+          pomeranian.bond += 0.05;
+          showBubble('Гав! Я выиграл! Давай ещё?', 4000);
+        }
+        incrementAction();
+        return;
+      }
+    }
+    if (!gameBoard.includes('')) {
+      gameOver = true;
+      gameActive = false;
+      updateGameMessage('Ничья! Дружеская игра 🤝');
+      showBubble('Ничья! Ты достойный соперник!', 4000);
+      incrementAction();
+    }
+  }
+
+  function updateGameMessage(msg) {
+    gameMessage.textContent = msg;
+  }
+
+  function maybachMove() {
+    if (gameOver || !gameActive) return;
+
+    // Попытка выиграть
+    for (const pattern of winPatterns) {
+      const [a, b, c] = pattern;
+      if (gameBoard[a] === 'O' && gameBoard[b] === 'O' && gameBoard[c] === '') {
+        makeMove(c, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+      if (gameBoard[a] === 'O' && gameBoard[c] === 'O' && gameBoard[b] === '') {
+        makeMove(b, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+      if (gameBoard[b] === 'O' && gameBoard[c] === 'O' && gameBoard[a] === '') {
+        makeMove(a, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+    }
+
+    // Блокировка игрока
+    for (const pattern of winPatterns) {
+      const [a, b, c] = pattern;
+      if (gameBoard[a] === 'X' && gameBoard[b] === 'X' && gameBoard[c] === '') {
+        makeMove(c, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+      if (gameBoard[a] === 'X' && gameBoard[c] === 'X' && gameBoard[b] === '') {
+        makeMove(b, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+      if (gameBoard[b] === 'X' && gameBoard[c] === 'X' && gameBoard[a] === '') {
+        makeMove(a, 'O');
+        currentPlayer = 'X';
+        updateGameMessage('Твой ход!');
+        return;
+      }
+    }
+
+    // Центр
+    if (gameBoard[4] === '') {
+      makeMove(4, 'O');
+      currentPlayer = 'X';
+      updateGameMessage('Твой ход!');
+      return;
+    }
+
+    // Случайный ход
+    const emptyCells = gameBoard.map((val, idx) => val === '' ? idx : null).filter(v => v !== null);
+    if (emptyCells.length > 0) {
+      const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+      makeMove(randomCell, 'O');
+      currentPlayer = 'X';
+      updateGameMessage('Твой ход!');
+    }
+  }
+
+  function startNewGame() {
+    gameBoard = ['', '', '', '', '', '', '', '', ''];
+    gameActive = true;
+    gameOver = false;
+    currentPlayer = 'X';
+    renderBoard();
+    updateGameMessage('Твой ход! Ты играешь за X');
+    showBubble('Давай сыграем! Твой ход первый.', 3000);
+  }
+
+  document.getElementById('tictactoeBtn').addEventListener('click', () => {
+    if (pomeranian.isSleeping) {
+      showBubble('Я сплю... Разбуди меня!', 2000);
+      return;
+    }
+    menuPanel.classList.remove('open');
+    gameModal.classList.add('active');
+    startNewGame();
+  });
+
+  newGameBtn.addEventListener('click', startNewGame);
+  closeGameBtn.addEventListener('click', () => {
+    gameModal.classList.remove('active');
+    gameActive = false;
+    showBubble('Поиграем позже! Гав!', 2000);
+  });
+
+  sleepToggleButton.addEventListener('click', () => {
+    if (pomeranian.isSleeping) softWakeUp('button');
+    else { stateLocked = true; setState(STATE.SLEEP); }
+  });
+
   // ========== ИНИЦИАЛИЗАЦИЯ ==========
   function initBed() {
     const savedBed = JSON.parse(localStorage.getItem('spitz_bed') || '{}');
-    pomeranian.bedX = savedBed.x || (width - 200);
-    pomeranian.bedY = savedBed.y || (height - 150);
+    pomeranian.bedX = savedBed.x || (window.innerWidth - 200);
+    pomeranian.bedY = savedBed.y || (window.innerHeight - 150);
     dogBed.style.left = pomeranian.bedX + 'px';
     dogBed.style.top = pomeranian.bedY + 'px';
   }
+
   window.addEventListener('beforeunload', () => {
     localStorage.setItem('spitz_bed', JSON.stringify({ x: pomeranian.bedX, y: pomeranian.bedY }));
   });
 
   function resizeCanvas() {
+    const dpr = isLowPerformance ? Math.min(window.devicePixelRatio, 2) : window.devicePixelRatio || 1;
     width = window.innerWidth;
     height = window.innerHeight;
-    canvas.width = width * window.devicePixelRatio;
-    canvas.height = height * window.devicePixelRatio;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
   }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
+  // ========== МОНИТОРИНГ FPS ==========
+  let fpsFrames = 0, fpsTime = performance.now();
+  let averageFPS = 60;
+  function checkFPS() {
+    fpsFrames++;
+    const now = performance.now();
+    if (now - fpsTime >= 1000) {
+      averageFPS = Math.round(fpsFrames / ((now - fpsTime) / 1000));
+      fpsFrames = 0; fpsTime = now;
+      if (averageFPS < 20 && enableEffects) {
+        enableEffects = false;
+        settings.showPrints = false;
+        document.getElementById('perfModeIndicator').style.display = 'block';
+        console.warn('Автоматическое отключение эффектов из-за низкого FPS');
+      } else if (averageFPS > 40 && !enableEffects && !isLowPerformance) {
+        enableEffects = true;
+        settings.showPrints = document.getElementById('showPrintsCheck').checked;
+        document.getElementById('perfModeIndicator').style.display = 'none';
+      }
+    }
+  }
+
   // ========== ЗАПУСК ИГРОВОГО ЦИКЛА ==========
   let lastFrameTime = performance.now();
   function gameLoop() {
+    checkFPS();
     const now = performance.now();
     const dt = now - lastFrameTime;
     lastFrameTime = now;
 
-    updateNeeds(dt);
-    decideNextState();
-    if (!pomeranian.isDragged && !pomeranian.isSleeping) updateMoveToTarget();
-    updateAnimationByState();
-    updateFacing();
-    if (!pomeranian.isSleeping && (Math.abs(pomeranian.vx) > 0.5 || pomeranian.isMovingToTarget)) addPawPrint();
-    spontaneousActions();
+    if (!gameModal.classList.contains('active')) {
+      updateNeeds(dt);
+      decideNextState();
+      if (!pomeranian.isDragged && !pomeranian.isSleeping) updateMoveToTarget();
+      updateAnimationByState();
+      updateFacing();
+      if (enableEffects && settings.showPrints && (Math.abs(pomeranian.vx) > 0.5 || pomeranian.isMovingToTarget)) {
+        addPawPrint();
+      }
+      spontaneousActions();
+    }
 
     pomeranian.vx = (pomeranian.targetX || pomeranian.x) ? (pomeranian.targetX - pomeranian.x) * 0.05 : 0;
     pomeranian.vy = (pomeranian.targetY || pomeranian.y) ? (pomeranian.targetY - pomeranian.y) * 0.05 : 0;
@@ -1190,7 +1517,7 @@
     updateMoodDisplay();
     updateSleepDisplay();
     gameLoop();
-    setTimeout(() => showBubble('Привет! Я Майбах — прозрачный и живой!', 4000), 500);
+    setTimeout(() => showBubble('Привет! Я Майбах — давай играть в крестики-нолики!', 4000), 500);
   });
 
 })();
