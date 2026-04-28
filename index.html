@@ -74,7 +74,7 @@
       padding: 80px 20px 20px;
       overflow-y: auto;
       border-left: 2px solid #ffb347;
-      touch-action: auto; /* Разрешаем скролл меню */
+      touch-action: auto;
     }
     #menuPanel.open { transform: translateX(0); }
     #menuCloseBtn {
@@ -101,13 +101,12 @@
     .setting-label { color: #ccc; font-size: 14px; display: flex; justify-content: space-between; }
     .state-item { color: #fff; font-size: 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 
-    /* Модальное окно игры */
     #gameModal {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
       z-index: 600; display: none; align-items: center; justify-content: center;
       flex-direction: column;
-      touch-action: auto; /* разрешаем тач внутри окна */
+      touch-action: auto;
     }
     #gameModal.active { display: flex; }
     #gameContainer {
@@ -176,7 +175,6 @@
 <div id="menuButton">☰</div>
 <div id="sleepToggleButton" title="Сон/Пробуждение">😴</div>
 
-<!-- Модальное окно игры -->
 <div id="gameModal">
   <div id="gameContainer">
     <div id="gameTitle">🎮 Крестики-нолики с Майбахом</div>
@@ -286,7 +284,7 @@
 
   // ========== ХРАНЕНИЕ НАСТРОЕК ==========
   const STORAGE_KEY = 'spitz_visual';
-  let settings = { size: 100, opacity: 100, showPrints: true };
+  let settings = { size: 100, opacity: 100, showPrints: true }; // size – относительный масштаб (50-150)
 
   function loadVisualSettings() {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -311,6 +309,16 @@
     document.getElementById('sizeValue').textContent = settings.size + '%';
     document.getElementById('opacityValue').textContent = settings.opacity + '%';
   }
+
+  // ========== ДИНАМИЧЕСКИЙ БАЗОВЫЙ МАСШТАБ ==========
+  const BASE_DOG_HEIGHT = 130; // высота спрайта в пикселях при 100% (без учёта optimalScale)
+  let optimalScale = 1.0; // будет пересчитываться при ресайзе
+
+  function updateOptimalScale() {
+    // высота пёселя должна составлять примерно 35% от высоты окна
+    optimalScale = (window.innerHeight * 0.35) / BASE_DOG_HEIGHT;
+  }
+  updateOptimalScale();
 
   // ========== ХАРАКТЕР ==========
   const PERSONALITY = {
@@ -962,11 +970,12 @@
     else if (movingLeft && pomeranian.facingRight) pomeranian.facingRight = false;
   }
 
-  // ========== ОТРИСОВКА ПСА ==========
+  // ========== ОТРИСОВКА ПСА С УЧЁТОМ optimalScale ==========
   function drawDogOnCanvas() {
     const dogWidth = dogVideo.videoWidth || 130;
     const dogHeight = dogVideo.videoHeight || 130;
-    const scale = settings.size / 100;
+    // итоговый масштаб = оптимальный * пользовательский процент
+    const scale = optimalScale * (settings.size / 100);
     const drawWidth = dogWidth * scale;
     const drawHeight = dogHeight * scale;
     const x = pomeranian.x - drawWidth / 2;
@@ -1124,12 +1133,11 @@
     pomeranian.bond = clamp(pomeranian.bond - 0.002, 0, 1);
   }, 5000);
 
-  // ========== ОБНОВЛЕНИЕ КООРДИНАТ МЫШИ/ТАЧА (без блокировки интерфейса) ==========
+  // ========== ОБНОВЛЕНИЕ КООРДИНАТ МЫШИ/ТАЧА ==========
   window.addEventListener('mousemove', (e) => {
     mouseX = e.clientX; mouseY = e.clientY;
   });
 
-  // Для тач-событий используем только canvas, чтобы не мешать меню и игре
   canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     const t = e.touches[0];
@@ -1142,7 +1150,7 @@
     if (t) { mouseX = t.clientX; mouseY = t.clientY; }
   }, {passive: false});
 
-  // ========== ПЕРЕТАСКИВАНИЕ ЛЕЖАНКИ (остаётся на dogBed) ==========
+  // ========== ПЕРЕТАСКИВАНИЕ ЛЕЖАНКИ ==========
   dogBed.addEventListener('mousedown', (e) => {
     e.stopPropagation();
     pomeranian.bedDragged = true;
@@ -1257,7 +1265,7 @@
   // ========== ИГРА: КРЕСТИКИ-НОЛИКИ ==========
   let gameBoard = ['', '', '', '', '', '', '', '', ''];
   let gameActive = false;
-  let currentPlayer = 'X'; // Игрок всегда X, Майбах — O
+  let currentPlayer = 'X';
   let gameOver = false;
 
   const winPatterns = [
@@ -1338,7 +1346,6 @@
   function maybachMove() {
     if (gameOver || !gameActive) return;
 
-    // Попытка выиграть
     for (const pattern of winPatterns) {
       const [a, b, c] = pattern;
       if (gameBoard[a] === 'O' && gameBoard[b] === 'O' && gameBoard[c] === '') {
@@ -1352,7 +1359,6 @@
       }
     }
 
-    // Блокировка игрока
     for (const pattern of winPatterns) {
       const [a, b, c] = pattern;
       if (gameBoard[a] === 'X' && gameBoard[b] === 'X' && gameBoard[c] === '') {
@@ -1366,12 +1372,10 @@
       }
     }
 
-    // Центр
     if (gameBoard[4] === '') {
       makeMove(4, 'O'); currentPlayer = 'X'; updateGameMessage('Твой ход!'); return;
     }
 
-    // Случайный ход
     const emptyCells = gameBoard.map((val, idx) => val === '' ? idx : null).filter(v => v !== null);
     if (emptyCells.length > 0) {
       const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
@@ -1436,6 +1440,7 @@
     canvas.style.height = height + 'px';
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
+    updateOptimalScale(); // пересчитываем базовый масштаб при ресайзе
   }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
@@ -1510,7 +1515,7 @@
     updateMoodDisplay();
     updateSleepDisplay();
     gameLoop();
-    setTimeout(() => showBubble('Привет! Я Майбах — давай играть в крестики-нолики!', 4000), 500);
+    setTimeout(() => showBubble('Привет! Я Майбах — теперь я идеального размера для твоего экрана!', 4000), 500);
   });
 
 })();
