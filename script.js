@@ -55,7 +55,8 @@
     targetX:null, targetY:null, moveStart:0, moveDur:0, startX:0, startY:0, moving:false,
     prints:[], lastPrintTime:0, bedX:0, bedY:0, bedDrag:false, bedOffX:0, bedOffY:0,
     ball:{x:0, y:0, active:false, r:20}, emotion:'happy', bond:0.6,
-    memory:{pet:0, play:0, ignore:Date.now()}, xp:0, level:1, collar:'none'
+    memory:{pet:0, play:0, ignore:Date.now()}, xp:0, level:1, collar:'none',
+    shakeCount:0, lastAngryTime:0
   };
   let stateLock = false, lastDec = 0;
   const needs = {energy:0.8, fun:0.7, social:0.6};
@@ -68,6 +69,7 @@
 
   let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
   let bedDrag = false, bedOffX = 0, bedOffY = 0;
+  let dragPrevX = 0, dragPrevY = 0;   // для расчёта скорости перетаскивания
 
   const ANIM = {
     idle:   {src:'animations/sitting.webm', type:'video', rate:1, loop:true},
@@ -216,7 +218,6 @@
     dogVideo.play().then(() => {
         videoReady = true;
         dogVideo.pause();
-        // Активируем ту анимацию, которая сейчас должна быть
         setAnim(pet.anim);
     }).catch(() => { videoReady = false; });
   };
@@ -227,7 +228,6 @@
     if (!anim) return;
     pet.anim = name;
 
-    // Всегда настраиваем источник видео
     if (animReadyHandler) dogVideo.removeEventListener('canplay', animReadyHandler);
     dogVideo.src = anim.src;
     dogVideo.playbackRate = anim.rate || 1;
@@ -247,7 +247,6 @@
         dogVideo.addEventListener('canplay', animReadyHandler);
       }
     }
-    // Если ещё не готово, анимация настроена, но не запущена – запустится при initVideoPlayback.
   };
 
   const updateAnimByState = () => {
@@ -428,18 +427,21 @@
           if (pet.onMoveEnd) { const cb = pet.onMoveEnd; pet.onMoveEnd = null; cb(); }
         }
       }
-      // Сначала пересчитываем скорость
       pet.vx = pet.targetX ? (pet.targetX-pet.x)*0.05 : 0;
       pet.vy = pet.targetY ? (pet.targetY-pet.y)*0.05 : 0;
-      // Теперь обновляем анимацию (учитывая свежую скорость)
       updateAnimByState();
-      // Направление взгляда
       if (pet.moving && pet.targetX !== null) {
         pet.facing = pet.targetX > pet.x;
       } else if (Math.abs(pet.vx) > 0.1) {
         pet.facing = pet.vx > 0;
       }
       if (settings.showPrints && enableFX && (Math.abs(pet.vx)>0.5 || pet.moving) && pet.y >= H-100) addPrint();
+
+      // Успокоение после гнева
+      if (pet.mood === 'angry' && Date.now() - pet.lastAngryTime > 5000) {
+        pet.mood = 'calm';
+        updateMood();
+      }
     }
     ctx.clearRect(0, 0, W, H);
     drawWeather();
@@ -466,7 +468,6 @@
     }
     pet.ball.x = clamp(pet.ball.x, 100, W-100);
     pet.ball.y = clamp(pet.ball.y, 100, H-100);
-    // Сбрасываем мышь в центр экрана
     mouseX = W / 2;
     mouseY = H / 2;
     updateWeatherFx();
@@ -717,7 +718,6 @@
 
     const mx = e.clientX, my = e.clientY;
 
-    // Мячик
     if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
       e.preventDefault();
       ballDrag = true;
@@ -727,7 +727,6 @@
       return;
     }
 
-    // Лежанка
     const bedW = 160, bedH = 100;
     const bedCX = pet.bedX + bedW/2, bedCY = pet.bedY + bedH/2;
     if (Math.hypot(mx - bedCX, my - bedCY) < Math.max(bedW, bedH)/2 + 10) {
@@ -745,12 +744,14 @@
       pet.dx = pet.x - mx;
       pet.dy = pet.y - my;
       pet.memory.pet = Date.now();
+      pet.shakeCount = 0;
+      dragPrevX = mx;
+      dragPrevY = my;
       canvas.setPointerCapture(e.pointerId);
     }
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    // Важно: всегда обновляем координаты мыши
     mouseX = e.clientX;
     mouseY = e.clientY;
 
@@ -768,9 +769,41 @@
     }
     if (!pet.dragged) return;
     e.preventDefault();
+
+    const now = Date.now();
+    const dx = e.clientX - dragPrevX;
+    const dy = e.clientY - dragPrevY;
+    const distance = Math.hypot(dx, dy);
+
+    // Реакция на агрессивное перетаскивание
+    if (distance > 15 && now - pet.lastAngryTime > 2000) {
+      pet.lastAngryTime = now;
+      pet.mood = 'angry';
+      updateMood();
+      showBubble(pick(phrases.angryWake), 2000);
+      playSound('angry');
+      pet.bond = Math.max(0, pet.bond - 0.03);
+      pet.x += (Math.random() - 0.5) * 20;
+      pet.y += (Math.random() - 0.5) * 20;
+      pet.shakeCount = (pet.shakeCount || 0) + 1;
+      if (pet.shakeCount >= 3) {
+        showBubble("ХВАТИТ! Я ухожу!", 2000);
+        pet.dragged = false;
+        canvas.releasePointerCapture(e.pointerId);
+        pet.shakeCount = 0;
+        return;
+      }
+    } else if (distance <= 15) {
+      pet.shakeCount = 0;
+    }
+
+    // Обычное перетаскивание
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
     pet.facing = (e.clientX + pet.dx) > pet.x;
+
+    dragPrevX = e.clientX;
+    dragPrevY = e.clientY;
   });
 
   canvas.addEventListener('pointerup', (e) => {
