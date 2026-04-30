@@ -11,12 +11,6 @@
     }
   };
 
-  const escapeHtml = (str) => {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  };
-
   const UA = navigator.userAgent;
   const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(UA);
   const isLow = isMobile && (navigator.deviceMemory || 4) < 4;
@@ -69,7 +63,7 @@
 
   let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
   let bedDrag = false, bedOffX = 0, bedOffY = 0;
-  let dragPrevX = 0, dragPrevY = 0, lastMoveTime = 0;   // для расчёта скорости перетаскивания
+  let dragPrevX = 0, dragPrevY = 0, lastMoveTime = 0;
 
   const ANIM = {
     idle:   {src:'animations/sitting.webm', type:'video', rate:1, loop:true},
@@ -437,7 +431,6 @@
       }
       if (settings.showPrints && enableFX && (Math.abs(pet.vx)>0.5 || pet.moving) && pet.y >= H-100) addPrint();
 
-      // Успокоение после гнева
       if (pet.mood === 'angry' && Date.now() - pet.lastAngryTime > 5000) {
         pet.mood = 'calm';
         updateMood();
@@ -640,6 +633,93 @@
     incAction();
   };
 
+  // Новая игра Simon
+  let simonSequence = [], simonPlayerIndex = 0, simonActive = false, simonShowing = false;
+  let simonButtons = [];
+
+  const startSimonGame = () => {
+    simonSequence = [];
+    simonPlayerIndex = 0;
+    simonActive = true;
+    simonShowing = false;
+    $('simonMessage').textContent = 'Смотри внимательно!';
+    $('newSimonGameBtn').style.display = 'none';
+    addSimonStep();
+    showSimonSequence();
+  };
+
+  const addSimonStep = () => {
+    simonSequence.push(Math.floor(Math.random() * 4));
+  };
+
+  const showSimonSequence = () => {
+    if (!simonActive) return;
+    simonShowing = true;
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= simonSequence.length) {
+        clearInterval(interval);
+        simonShowing = false;
+        $('simonMessage').textContent = 'Твоя очередь!';
+        simonButtons.forEach(b => b.style.pointerEvents = 'auto');
+        return;
+      }
+      const idx = simonSequence[i];
+      const btn = simonButtons[idx];
+      btn.classList.add('active');
+      playSimonSound(idx);
+      setTimeout(() => { btn.classList.remove('active'); }, 300);
+      i++;
+    }, 800);
+  };
+
+  const simonBtnClick = (index) => {
+    if (!simonActive || simonShowing) return;
+    if (simonPlayerIndex >= simonSequence.length) return;
+    const expected = simonSequence[simonPlayerIndex];
+    if (index === expected) {
+      simonPlayerIndex++;
+      playSimonSound(index);
+      if (simonPlayerIndex === simonSequence.length) {
+        simonPlayerIndex = 0;
+        addSimonStep();
+        simonButtons.forEach(b => b.style.pointerEvents = 'none');
+        $('simonMessage').textContent = 'Молодец! Следующий уровень...';
+        addXP(5);
+        incAction();
+        setTimeout(() => { showSimonSequence(); }, 1000);
+      }
+    } else {
+      simonActive = false;
+      $('simonMessage').textContent = `Ошибка! Счёт: ${simonSequence.length - 1}`;
+      showBubble(`Я запутал тебя! Гав!`, 3000);
+      playSound('angry');
+      simonButtons.forEach(b => b.style.pointerEvents = 'none');
+      $('newSimonGameBtn').style.display = 'inline-block';
+    }
+  };
+
+  const playSimonSound = (idx) => {
+    if (!enableFX || (isMobile && !userInteracted)) return;
+    const vol = settings.volume / 100;
+    try {
+      const ac = getAudioCtx();
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      g.gain.value = vol * 0.3;
+      const freqs = [523, 659, 784, 1047];
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freqs[idx], ac.currentTime);
+      osc.start(); osc.stop(ac.currentTime + 0.3);
+      osc.connect(g); g.connect(ac.destination);
+    } catch(e) {}
+  };
+
+  const cleanupSimon = () => {
+    simonActive = false;
+    simonButtons.forEach(b => b.style.pointerEvents = 'none');
+  };
+
   const openModal = (id) => {
     const modal = document.getElementById(id);
     if (!modal || modal.classList.contains('active')) return;
@@ -652,6 +732,7 @@
     if (id === 'tictactoeModal') cleanupTTT();
     else if (id === 'treatModal') cleanupTreat();
     else if (id === 'tugModal') cleanupTug();
+    else if (id === 'simonModal') cleanupSimon();
   };
 
   const bindUI = () => {
@@ -666,6 +747,10 @@
     $('openTugBtn').onclick = () => { if (pet.sleep) showBubble('Я сплю...'); else { openModal('tugModal'); startTugGame(); } };
     $('resetTugBtn').onclick = () => { resetTug(); startTugGame(); };
     $('closeTugBtn').onclick = () => closeModal('tugModal');
+
+    $('openSimonBtn').onclick = () => { if (pet.sleep) showBubble('Я сплю...'); else { openModal('simonModal'); startSimonGame(); } };
+    $('newSimonGameBtn').onclick = startSimonGame;
+    $('closeSimonBtn').onclick = () => closeModal('simonModal');
 
     diaryBtn.onclick = () => { renderDiary(); openModal('diaryModal'); };
     $('closeDiaryBtn').onclick = () => closeModal('diaryModal');
@@ -710,6 +795,13 @@
     $('menuCloseBtn').onclick = () => menuPanel.classList.remove('open');
     sleepToggle.onclick = () => { if (pet.sleep) softWake(); else { stateLock=true; setState(STATE.SLEEP); } };
     guestBtn.onclick = () => { showBubble('Гостевой режим! Привет!'); pet.bond = 0.5; };
+
+    // Инициализация кнопок Simon
+    const simonBtns = document.querySelectorAll('.simon-btn');
+    simonButtons = Array.from(simonBtns);
+    simonBtns.forEach((btn, i) => {
+      btn.addEventListener('click', () => simonBtnClick(i));
+    });
   };
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -745,7 +837,6 @@
       pet.dy = pet.y - my;
       pet.memory.pet = Date.now();
       pet.shakeCount = 0;
-      // сброс для корректного отслеживания скорости
       dragPrevX = mx;
       dragPrevY = my;
       lastMoveTime = performance.now();
@@ -797,11 +888,9 @@
         return;
       }
     } else if (distance < 5) {
-      // Очень медленное движение — сбрасываем накопление злости
       pet.shakeCount = 0;
     }
 
-    // Обычное перетаскивание (плавно)
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
     pet.facing = (e.clientX + pet.dx) > pet.x;

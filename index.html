@@ -48,6 +48,22 @@
   </div>
 </div>
 
+<div id="simonModal" class="game-modal">
+  <div class="game-container">
+    <div style="color:#ffd966;font-size:24px;">🐾 Simon говорит</div>
+    <div id="simonDisplay" style="margin:15px; font-size:20px; color:white;">Смотри и повторяй!</div>
+    <div id="simonButtons" style="display:grid;grid-template-columns:100px 100px;gap:10px;justify-content:center;">
+      <button class="simon-btn" data-index="0" style="background:#FF6B6B;">🐾</button>
+      <button class="simon-btn" data-index="1" style="background:#4ECDC4;">🦴</button>
+      <button class="simon-btn" data-index="2" style="background:#FFD966;">🎾</button>
+      <button class="simon-btn" data-index="3" style="background:#C3A5E0;">❤️</button>
+    </div>
+    <div id="simonMessage" style="color:white;margin:10px;"></div>
+    <button id="newSimonGameBtn">🔄 Начать</button>
+    <button id="closeSimonBtn">✕ Закрыть</button>
+  </div>
+</div>
+
 <div id="diaryModal" class="game-modal">
   <div class="game-container" style="max-width:400px;text-align:left;">
     <div style="color:#ffd966;font-size:24px;text-align:center;">📔 Дневник Майбаха</div>
@@ -90,6 +106,7 @@
       <button class="menu-btn" id="openTttBtn">❌⭕</button>
       <button class="menu-btn" id="openTreatBtn">🍖</button>
       <button class="menu-btn" id="openTugBtn">🪢</button>
+      <button class="menu-btn" id="openSimonBtn">🐾</button>
     </div>
   </div>
   <div class="menu-section">
