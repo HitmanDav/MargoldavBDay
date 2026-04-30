@@ -1,8 +1,6 @@
 (function() {
   "use strict";
 
-  const _p1 = "SpitzMay";
-  const _p2 = "bach2026";
   const _p3 = "Secret";
 
   const storage = {
@@ -52,6 +50,7 @@
   const textInput = $('textInputMenu'), voiceBtn = $('voiceBtnMenu');
   const diaryBtn = $('diaryBtn'), photoBtn = $('photoBtn'), weatherBtn = $('weatherBtn');
   const chatBtn = $('chatBtnMenu');
+  const _p2 = "bach2026";
   const stepCheck = $('stepCounterCheck');
   const tttBoard = $('ticTacToeBoard'), tttMsg = $('tttMessage');
   const treatBowls = $('treatBowls'), treatMsg = $('treatMessage');
@@ -79,6 +78,7 @@
   let stateLock = false, lastDec = 0;
   const needs = {energy:0.8, fun:0.7, social:0.6};
   const STATE = {IDLE:'IDLE', WANDER:'WANDER', FOLLOW:'FOLLOW', FETCH:'FETCH', SLEEP:'SLEEP'};
+  const _p1 = "SpitzMay";
   let currState = STATE.IDLE;
   const CONFIG = { apiKeys:[], models:[], systemPrompt:'' };
   let keyIdx = 0, videoReady = false;
@@ -239,9 +239,17 @@
     dogVideo.play().then(() => {
         videoReady = true;
         dogVideo.pause();
-        setAnim(pet.anim);
+        if (dogVideo.src && dogVideo.readyState >= 2) {
+            dogVideo.play().catch(()=>{});
+        } else {
+            const onReady = () => {
+                dogVideo.play().catch(()=>{});
+                dogVideo.removeEventListener('canplay', onReady);
+            };
+            dogVideo.addEventListener('canplay', onReady);
+        }
     }).catch(() => { videoReady = false; });
-  };
+};
 
   const setAnim = (name) => {
     if (pet.anim === name && name !== 'sneeze' && name !== 'look') return;
