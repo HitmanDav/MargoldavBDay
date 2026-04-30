@@ -1,6 +1,10 @@
 (function() {
   "use strict";
 
+  const _p1 = "SpitzMay";
+  const _p2 = "bach2026";
+  const _p3 = "Secret";
+
   const storage = {
     get(key, fallback = null) {
       try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
@@ -8,6 +12,25 @@
     },
     set(key, value) {
       try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
+    }
+  };
+
+  const responseCache = {
+    maxSize: 50,
+    store: new Map(),
+    get(key) {
+      const entry = this.store.get(key);
+      if (entry && Date.now() - entry.time < 60000) {
+        return entry.value;
+      }
+      return null;
+    },
+    set(key, value) {
+      if (this.store.size >= this.maxSize) {
+        const firstKey = this.store.keys().next().value;
+        this.store.delete(firstKey);
+      }
+      this.store.set(key, { value, time: Date.now() });
     }
   };
 
@@ -28,7 +51,7 @@
   const rainBtn = $('rainBtn'), snowBtn = $('snowBtn'), clearWeatherBtn = $('clearWeatherBtn');
   const textInput = $('textInputMenu'), voiceBtn = $('voiceBtnMenu');
   const diaryBtn = $('diaryBtn'), photoBtn = $('photoBtn'), weatherBtn = $('weatherBtn');
-  const chatBtn = $('chatBtnMenu'); // новая кнопка
+  const chatBtn = $('chatBtnMenu');
   const stepCheck = $('stepCounterCheck');
   const tttBoard = $('ticTacToeBoard'), tttMsg = $('tttMessage');
   const treatBowls = $('treatBowls'), treatMsg = $('treatMessage');
@@ -66,7 +89,6 @@
   let bedDrag = false, bedOffX = 0, bedOffY = 0;
   let dragPrevX = 0, dragPrevY = 0, lastMoveTime = 0;
 
-  // Переменные чата
   let chatHistory = [];
   let chatActive = false;
 
@@ -472,57 +494,105 @@
   };
   window.addEventListener('resize', resize);
 
+  const decryptKeys = (encryptedKeys) => {
+    const pass = _p1 + _p2 + _p3;
+    const passBytes = new TextEncoder().encode(pass);
+    return encryptedKeys.map(enc => {
+      const data = Uint8Array.from(atob(enc), c => c.charCodeAt(0));
+      return Array.from(data, (byte, i) =>
+        String.fromCharCode(byte ^ passBytes[i % passBytes.length])
+      ).join('');
+    });
+  };
+
   const loadConfig = () => {
     fetch('config.json', { signal: AbortSignal.timeout(5000) })
       .then(r => r.json())
       .then(d => {
-        if (d.apiKeys) CONFIG.apiKeys = d.apiKeys;
+        if (d.apiKeys) CONFIG.apiKeys = decryptKeys(d.apiKeys);
         if (d.models) CONFIG.models = d.models;
         if (d.systemPrompt) CONFIG.systemPrompt = d.systemPrompt;
         Object.freeze(CONFIG);
       }).catch(() => {});
   };
+
   const getApiKey = () => CONFIG.apiKeys.length ? CONFIG.apiKeys[keyIdx] : null;
   const rotateKey = () => { keyIdx = (keyIdx+1) % CONFIG.apiKeys.length; return CONFIG.apiKeys[keyIdx]; };
 
-  // Устаревшая askAI для быстрых ответов (оставлена для совместимости)
-  const askAI = async (msg) => {
+  const selectModel = () => {
+    if (!CONFIG.models.length) return 'google/gemma-4-31b-it:free';
+    return CONFIG.models[0];
+  };
+
+  const callAI = async (messages, maxTokens = 120, cacheKey = null) => {
+    if (cacheKey) {
+      const cached = responseCache.get(cacheKey);
+      if (cached) return cached;
+    }
+
     const key = getApiKey();
-    if (!key) { showBubble('Нет ключа API', 3000); return; }
-    const model = CONFIG.models[0] || 'google/gemma-4-31b-it:free';
+    if (!key) return null;
+    const model = selectModel();
+
     let retries = 0;
     const attempt = async () => {
-      if (retries++ > 3) { showBubble('ИИ устал', 3000); return; }
+      if (retries++ > 3) return null;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
       try {
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method:'POST',
           headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':location.origin},
-          body: JSON.stringify({model, messages:[{role:'system',content:CONFIG.systemPrompt},{role:'user',content:msg}], max_tokens:120, temperature:0.9}),
+          body: JSON.stringify({model, messages, max_tokens: maxTokens, temperature:0.9}),
           signal: controller.signal
         });
         clearTimeout(timeout);
-        if (!res.ok) { if (res.status===429||res.status===401||res.status===403) { rotateKey(); return attempt(); } throw new Error(`HTTP ${res.status}`); }
+        if (!res.ok) {
+          if (res.status===429||res.status===401||res.status===403) {
+            rotateKey();
+            return attempt();
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
-        let reply = data.choices?.[0]?.message?.content || 'Гав?';
-        reply = reply.replace(/р/g, () => Math.random()<0.1?'р-р-р':'р');
-        showBubble(reply, 5000); speak(reply); incAction();
-      } catch(e) { clearTimeout(timeout); showBubble('Ошибка связи', 3000); }
+        const reply = data.choices?.[0]?.message?.content || 'Гав?';
+        if (cacheKey) responseCache.set(cacheKey, reply);
+        return reply;
+      } catch(e) {
+        clearTimeout(timeout);
+        return null;
+      }
     };
-    attempt();
+    return await attempt();
+  };
+
+  const askAI = async (msg) => {
+    const cacheKey = 'quick_' + msg.trim().toLowerCase();
+    const reply = await callAI([
+      {role:'system',content:CONFIG.systemPrompt},
+      {role:'user',content:msg}
+    ], 80, cacheKey);
+    if (reply) {
+      const formatted = reply.replace(/р/g, () => Math.random()<0.1?'р-р-р':'р');
+      showBubble(formatted, 5000);
+      speak(formatted);
+      incAction();
+    } else {
+      showBubble('Ошибка связи', 3000);
+    }
   };
 
   const handleMsg = (msg) => {
     if (pet.sleep) { showBubble('Я сплю...', 1000); return; }
     pet.memory.ignore = Date.now(); pet.bond = Math.min(1, pet.bond+0.01);
     if (/соня|хозяйка|хозяин|хозяйку|хозяйке|соню|соне|соней/i.test(msg)) {
-      showBubble(pick(phrases.owner), 5000); speak(pick(phrases.owner)); incAction(); return;
+      showBubble(pick(phrases.owner), 5000);
+      speak(pick(phrases.owner));
+      incAction(); return;
     }
     askAI(msg);
   };
 
-  // Функции чата
   const addChatMessage = (sender, text, isTyping = false) => {
     const messagesDiv = $('chatMessages');
     const msgDiv = document.createElement('div');
@@ -556,60 +626,27 @@
     chatHistory.push({ role: 'user', content: userMsg });
     const typingEl = addChatMessage('maybach', '...', true);
 
-    const key = getApiKey();
-    if (!key) {
-      updateTyping(typingEl, 'Нет ключа API 😔');
-      return;
-    }
-    const model = CONFIG.models[0] || 'google/gemma-4-31b-it:free';
     const messages = [
       { role: 'system', content: CONFIG.systemPrompt },
       ...chatHistory.slice(-10)
     ];
+    const cacheKey = 'chat_' + messages.map(m=>m.content).join('|').slice(-100);
+    const reply = await callAI(messages, 200, cacheKey);
 
-    let retries = 0;
-    const attempt = async () => {
-      if (retries++ > 3) {
-        updateTyping(typingEl, 'Майбах устал...');
-        return;
-      }
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      try {
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method:'POST',
-          headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':location.origin},
-          body: JSON.stringify({model, messages, max_tokens:200, temperature:0.9}),
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
-        if (!res.ok) {
-          if (res.status===429||res.status===401||res.status===403) {
-            rotateKey();
-            return attempt();
-          }
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content || 'Гав?';
-        const formattedReply = reply.replace(/р/g, () => Math.random()<0.1?'р-р-р':'р');
-        updateTyping(typingEl, formattedReply);
-        chatHistory.push({ role: 'assistant', content: formattedReply });
-        incAction();
-      } catch(e) {
-        clearTimeout(timeout);
-        updateTyping(typingEl, 'Ошибка связи 😢');
-      }
-    };
-    attempt();
+    if (reply) {
+      const formattedReply = reply.replace(/р/g, () => Math.random()<0.1?'р-р-р':'р');
+      updateTyping(typingEl, formattedReply);
+      chatHistory.push({ role: 'assistant', content: formattedReply });
+      incAction();
+    } else {
+      updateTyping(typingEl, 'Ошибка связи 😢');
+    }
   };
 
   const newChat = () => {
     chatHistory = [];
     $('chatMessages').innerHTML = '';
   };
-
-  // ... остальные игры (TTT, treat, tug, simon) ...
 
   let tttBoardData, tttActive, tttPlayer, tttOver, tttTimer;
   const winPatterns = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -876,7 +913,6 @@
     weatherBtn.onclick = () => { fetchWeather(); openModal('weatherModal'); };
     $('closeWeatherBtn').onclick = () => closeModal('weatherModal');
 
-    // Чат
     chatBtn.onclick = () => { if (pet.sleep) showBubble('Я сплю...'); else openModal('chatModal'); };
     $('closeChatBtn').onclick = () => closeModal('chatModal');
     $('newChatBtn').onclick = newChat;
