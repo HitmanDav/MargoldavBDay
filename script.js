@@ -250,7 +250,7 @@
 
   const drawDog = () => {
     const w = dogVideo.videoWidth || 130, h = dogVideo.videoHeight || 130;
-    const scale = (H * 0.35) / 130 * (settings.size / 100);
+    const scale = settings.size / 100;
     const dw = w * scale, dh = h * scale;
     const x = pet.x - dw/2, y = pet.y - dh/2;
     if (pet.collar !== 'none') {
@@ -491,21 +491,36 @@
   };
   const maybachTTT = () => {
     if (!tttActive || tttOver) return;
+    let moved = false;
     for (const [a,b,c] of winPatterns) {
-      if (tttBoardData[a]==='O'&&tttBoardData[b]==='O'&&!tttBoardData[c]) { makeTTTMove(c,'O'); return; }
-      if (tttBoardData[a]==='O'&&tttBoardData[c]==='O'&&!tttBoardData[b]) { makeTTTMove(b,'O'); return; }
-      if (tttBoardData[b]==='O'&&tttBoardData[c]==='O'&&!tttBoardData[a]) { makeTTTMove(a,'O'); return; }
+      if (tttBoardData[a]==='O'&&tttBoardData[b]==='O'&&!tttBoardData[c]) { setCell(c,'O'); moved=true; break; }
+      if (tttBoardData[a]==='O'&&tttBoardData[c]==='O'&&!tttBoardData[b]) { setCell(b,'O'); moved=true; break; }
+      if (tttBoardData[b]==='O'&&tttBoardData[c]==='O'&&!tttBoardData[a]) { setCell(a,'O'); moved=true; break; }
     }
-    for (const [a,b,c] of winPatterns) {
-      if (tttBoardData[a]==='X'&&tttBoardData[b]==='X'&&!tttBoardData[c]) { makeTTTMove(c,'O'); return; }
-      if (tttBoardData[a]==='X'&&tttBoardData[c]==='X'&&!tttBoardData[b]) { makeTTTMove(b,'O'); return; }
-      if (tttBoardData[b]==='X'&&tttBoardData[c]==='X'&&!tttBoardData[a]) { makeTTTMove(a,'O'); return; }
+    if (!moved) {
+      for (const [a,b,c] of winPatterns) {
+        if (tttBoardData[a]==='X'&&tttBoardData[b]==='X'&&!tttBoardData[c]) { setCell(c,'O'); moved=true; break; }
+        if (tttBoardData[a]==='X'&&tttBoardData[c]==='X'&&!tttBoardData[b]) { setCell(b,'O'); moved=true; break; }
+        if (tttBoardData[b]==='X'&&tttBoardData[c]==='X'&&!tttBoardData[a]) { setCell(a,'O'); moved=true; break; }
+      }
     }
-    if (!tttBoardData[4]) { makeTTTMove(4,'O'); return; }
-    const empty = tttBoardData.reduce((arr,v,i)=> v===''?[...arr,i]:arr, []);
-    if (empty.length) makeTTTMove(empty[Math.floor(Math.random()*empty.length)], 'O');
+    if (!moved) {
+      if (!tttBoardData[4]) { setCell(4,'O'); moved=true; }
+    }
+    if (!moved) {
+      const empty = tttBoardData.reduce((arr,v,i)=> v===''?[...arr,i]:arr, []);
+      if (empty.length) setCell(empty[Math.floor(Math.random()*empty.length)], 'O');
+    }
+    checkTTT();
+    if (!tttOver) {
+      tttPlayer = 'X';
+      tttMsg.textContent = 'Твой ход (X)';
+    }
   };
-  const makeTTTMove = (i,pl) => { tttBoardData[i]=pl; renderTTT(); checkTTT(); };
+  const setCell = (i, pl) => {
+    tttBoardData[i] = pl;
+    renderTTT();
+  };
   const checkTTT = () => {
     for (const [a,b,c] of winPatterns) {
       if (tttBoardData[a]&&tttBoardData[a]===tttBoardData[b]&&tttBoardData[a]===tttBoardData[c]) {
