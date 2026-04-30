@@ -19,7 +19,7 @@
   const $ = (id) => document.getElementById(id);
   const canvas = $('canvas'), ctx = canvas.getContext('2d');
   const dogVideo = $('dogVideo'), bubble = $('speechBubble');
-  const sleepInd = $('sleepIndicator'), dogBed = $('dogBed');
+  const sleepInd = $('sleepIndicator');
   const menuPanel = $('menuPanel'), menuBtn = $('menuButton');
   const sleepToggle = $('sleepToggleButton'), guestBtn = $('guestButton');
   const sizeSlider = $('sizeSlider'), volumeSlider = $('volumeSlider');
@@ -47,7 +47,7 @@
     x:0, y:0, vx:0, vy:0, mood:'happy', sleep:false, dragged:false, dx:0, dy:0,
     facing:true, anim:'idle',
     targetX:null, targetY:null, moveStart:0, moveDur:0, startX:0, startY:0, moving:false,
-    prints:[], lastPrintTime:0, bedX:0, bedY:0, bedDrag:false, bedOffX:0, bedOffY:0,
+    prints:[], lastPrintTime:0, bedX:0, bedY:0,
     ball:{x:0, y:0, active:false, r:20}, emotion:'happy', bond:0.6,
     memory:{pet:0, play:0, ignore:Date.now()}, xp:0, level:1, collar:'none',
     shakeCount:0, lastAngryTime:0
@@ -595,9 +595,11 @@
   };
 
   let tugPos = 50, tugActive = false;
+  let tugInterval = null;
   const cleanupTug = () => {
     tugActive = false;
     tugRope.onpointerdown = null;
+    if (tugInterval) { clearInterval(tugInterval); tugInterval = null; }
     window.removeEventListener('pointermove', tugMoveHandler);
     window.removeEventListener('pointerup', tugUpHandler);
   };
@@ -605,7 +607,17 @@
   const resetTug = () => { tugPos = 50; tugMarker.style.left = '50%'; tugMsg.textContent = 'Тяни за маркер!'; };
   const startTugGame = () => {
     cleanupTug();
-    tugActive = true; resetTug();
+    tugActive = true;
+    resetTug();
+
+    // Автоматическое движение вправо (Майбах)
+    tugInterval = setInterval(() => {
+        if (!tugActive) return;
+        tugPos = clamp(tugPos + 0.8, 5, 95);
+        tugMarker.style.left = tugPos + '%';
+        if (tugPos >= 90) endTug('lose');
+    }, 100);
+
     tugRope.onpointerdown = (e) => {
       if (!tugActive) return;
       e.preventDefault();
@@ -627,15 +639,18 @@
   };
   const endTug = (result) => {
     if (!tugActive) return;
-    tugActive = false; tugRope.onpointerdown = null;
+    tugActive = false;
+    tugRope.onpointerdown = null;
+    if (tugInterval) { clearInterval(tugInterval); tugInterval = null; }
     if (result==='win') { tugMsg.textContent='Ты выиграл! Майбах отпустил.'; showBubble('Ладно, твоя взяла!',2000); addXP(10); }
     else { tugMsg.textContent='Майбах победил!'; showBubble('Я сильнее! Гав!',2000); playSound('angry'); }
     incAction();
   };
 
-  // Новая игра Simon
   let simonSequence = [], simonPlayerIndex = 0, simonActive = false, simonShowing = false;
   let simonButtons = [];
+  const simonBaseDelay = 800;
+  const simonMinDelay = 300;
 
   const startSimonGame = () => {
     simonSequence = [];
@@ -656,6 +671,7 @@
     if (!simonActive) return;
     simonShowing = true;
     let i = 0;
+    const delay = Math.max(simonMinDelay, simonBaseDelay - (simonSequence.length - 1) * 50);
     const interval = setInterval(() => {
       if (i >= simonSequence.length) {
         clearInterval(interval);
@@ -668,9 +684,9 @@
       const btn = simonButtons[idx];
       btn.classList.add('active');
       playSimonSound(idx);
-      setTimeout(() => { btn.classList.remove('active'); }, 300);
+      setTimeout(() => { btn.classList.remove('active'); }, Math.max(100, delay - 100));
       i++;
-    }, 800);
+    }, delay);
   };
 
   const simonBtnClick = (index) => {
@@ -796,7 +812,6 @@
     sleepToggle.onclick = () => { if (pet.sleep) softWake(); else { stateLock=true; setState(STATE.SLEEP); } };
     guestBtn.onclick = () => { showBubble('Гостевой режим! Привет!'); pet.bond = 0.5; };
 
-    // Инициализация кнопок Simon
     const simonBtns = document.querySelectorAll('.simon-btn');
     simonButtons = Array.from(simonBtns);
     simonBtns.forEach((btn, i) => {
@@ -869,7 +884,6 @@
     const distance = Math.hypot(dx, dy);
     const timeDelta = now - lastMoveTime;
 
-    // Реакция только на резкие рывки (скорость > 0.8 пикселей/мс)
     if (timeDelta > 0 && distance > 10 && (distance / timeDelta) > 0.8 && (now - pet.lastAngryTime) > 2000) {
       pet.lastAngryTime = now;
       pet.mood = 'angry';
