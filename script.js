@@ -67,7 +67,7 @@
   let animReadyHandler = null, audioCtx = null, userInteracted = false;
 
   let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
-  let bedDrag = false, bedOffX = 0, bedOffY = 0;   // перетаскивание лежанки
+  let bedDrag = false, bedOffX = 0, bedOffY = 0;
 
   const ANIM = {
     idle:   {src:'animations/sitting.webm', type:'video', rate:1, loop:true},
@@ -251,7 +251,6 @@
     else setAnim('run');
   };
 
-  // Рисуем лежанку на canvas (под псом)
   const drawBed = () => {
     const bedW = 160, bedH = 100;
     const bx = pet.bedX, by = pet.bedY;
@@ -422,8 +421,14 @@
         }
       }
       updateAnimByState();
-      if (pet.vx > 0.1 || (pet.moving && pet.targetX && pet.targetX > pet.x)) pet.facing = true;
-      else if (pet.vx < -0.1 || (pet.moving && pet.targetX && pet.targetX < pet.x)) pet.facing = false;
+
+      // Улучшенное обновление направления (зеркала)
+      if (pet.moving && pet.targetX !== null) {
+        pet.facing = pet.targetX > pet.x;
+      } else if (Math.abs(pet.vx) > 0.1) {
+        pet.facing = pet.vx > 0;
+      }
+
       if (settings.showPrints && enableFX && (Math.abs(pet.vx)>0.5 || pet.moving) && pet.y >= H-100) addPrint();
     }
     pet.vx = pet.targetX ? (pet.targetX-pet.x)*0.05 : 0;
@@ -431,7 +436,7 @@
     ctx.clearRect(0, 0, W, H);
     drawWeather();
     drawBall();
-    drawBed();        // лежанка на заднем плане
+    drawBed();
     drawDog();
     if (bubble) {
       bubble.style.left = (pet.x-40) + 'px';
@@ -443,6 +448,9 @@
   const resize = () => {
     const dpr = isLow ? Math.min(window.devicePixelRatio,2) : window.devicePixelRatio||1;
     W = window.innerWidth; H = window.innerHeight;
+    // Устанавливаем мышь в центр окна
+    mouseX = W / 2;
+    mouseY = H / 2;
     canvas.width = W*dpr; canvas.height = H*dpr;
     canvas.style.width = W+'px'; canvas.style.height = H+'px';
     ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr,dpr);
@@ -701,7 +709,6 @@
 
     const mx = e.clientX, my = e.clientY;
 
-    // Проверка мячика
     if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
       e.preventDefault();
       ballDrag = true;
@@ -711,7 +718,6 @@
       return;
     }
 
-    // Проверка лежанки
     const bedW = 160, bedH = 100;
     const bedCX = pet.bedX + bedW/2, bedCY = pet.bedY + bedH/2;
     if (Math.hypot(mx - bedCX, my - bedCY) < Math.max(bedW, bedH)/2 + 10) {
@@ -734,12 +740,14 @@
   });
 
   canvas.addEventListener('pointermove', (e) => {
+    // Всегда обновляем координаты мыши
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
     if (ballDrag) {
       e.preventDefault();
       pet.ball.x = clamp(e.clientX + ballDragOffX, 30, W - 30);
       pet.ball.y = clamp(e.clientY + ballDragOffY, 30, H - 30);
-      mouseX = e.clientX;
-      mouseY = e.clientY;
       return;
     }
     if (bedDrag) {
@@ -752,9 +760,8 @@
     e.preventDefault();
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
-    // обновляем направление при перетаскивании
-    const dx = e.clientX + pet.dx - pet.x;
-    if (Math.abs(dx) > 1) pet.facing = dx > 0;
+    // Направление по фактическому смещению
+    pet.facing = (e.clientX + pet.dx) > pet.x;
   });
 
   canvas.addEventListener('pointerup', (e) => {
@@ -804,8 +811,6 @@
       showBubble('Вот твой мячик!', 1500);
     }
   });
-
-  // Убираем старые слушатели dogBed, они больше не нужны
 
   const startStepCounter = () => {
     if (stepWatchId) return;
@@ -883,7 +888,6 @@
   spawnBall();
   setInterval(() => { if (!pet.ball.active && Math.random() < 0.3) spawnBall(); }, 10000);
 
-  // Запрещаем автодвижение первые 2 секунды
   stateLock = true;
   setTimeout(() => { stateLock = false; }, 2000);
 
