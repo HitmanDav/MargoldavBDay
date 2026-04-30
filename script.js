@@ -251,7 +251,9 @@
   };
 
   const drawDog = () => {
-    const w = dogVideo.videoWidth || 130, h = dogVideo.videoHeight || 130;
+    const baseW = posterImg.complete && posterImg.naturalWidth ? posterImg.naturalWidth : 130;
+    const baseH = posterImg.complete && posterImg.naturalHeight ? posterImg.naturalHeight : 130;
+    const w = baseW, h = baseH;
     const scale = settings.size / 100;
     const dw = w * scale, dh = h * scale;
     const x = pet.x - dw/2, y = pet.y - dh/2;
