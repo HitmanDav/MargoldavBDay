@@ -69,7 +69,7 @@
 
   let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
   let bedDrag = false, bedOffX = 0, bedOffY = 0;
-  let dragPrevX = 0, dragPrevY = 0;   // для расчёта скорости перетаскивания
+  let dragPrevX = 0, dragPrevY = 0, lastMoveTime = 0;   // для расчёта скорости перетаскивания
 
   const ANIM = {
     idle:   {src:'animations/sitting.webm', type:'video', rate:1, loop:true},
@@ -745,8 +745,10 @@
       pet.dy = pet.y - my;
       pet.memory.pet = Date.now();
       pet.shakeCount = 0;
+      // сброс для корректного отслеживания скорости
       dragPrevX = mx;
       dragPrevY = my;
+      lastMoveTime = performance.now();
       canvas.setPointerCapture(e.pointerId);
     }
   });
@@ -770,13 +772,14 @@
     if (!pet.dragged) return;
     e.preventDefault();
 
-    const now = Date.now();
+    const now = performance.now();
     const dx = e.clientX - dragPrevX;
     const dy = e.clientY - dragPrevY;
     const distance = Math.hypot(dx, dy);
+    const timeDelta = now - lastMoveTime;
 
-    // Реакция на агрессивное перетаскивание
-    if (distance > 15 && now - pet.lastAngryTime > 2000) {
+    // Реакция только на резкие рывки (скорость > 0.8 пикселей/мс)
+    if (timeDelta > 0 && distance > 10 && (distance / timeDelta) > 0.8 && (now - pet.lastAngryTime) > 2000) {
       pet.lastAngryTime = now;
       pet.mood = 'angry';
       updateMood();
@@ -793,17 +796,19 @@
         pet.shakeCount = 0;
         return;
       }
-    } else if (distance <= 15) {
+    } else if (distance < 5) {
+      // Очень медленное движение — сбрасываем накопление злости
       pet.shakeCount = 0;
     }
 
-    // Обычное перетаскивание
+    // Обычное перетаскивание (плавно)
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
     pet.facing = (e.clientX + pet.dx) > pet.x;
 
     dragPrevX = e.clientX;
     dragPrevY = e.clientY;
+    lastMoveTime = now;
   });
 
   canvas.addEventListener('pointerup', (e) => {
