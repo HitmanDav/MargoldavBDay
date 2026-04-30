@@ -54,8 +54,8 @@
     facing:true, anim:'idle',
     targetX:null, targetY:null, moveStart:0, moveDur:0, startX:0, startY:0, moving:false,
     prints:[], lastPrintTime:0, bedX:0, bedY:0, bedDrag:false, bedOffX:0, bedOffY:0,
-    ball:{x:0,y:0,active:false,r:20}, emotion:'happy', bond:0.6,
-    memory:{pet:0,play:0,ignore:Date.now()}, xp:0, level:1, collar:'none'
+    ball:{x:0, y:0, active:false, r:20}, emotion:'happy', bond:0.6,
+    memory:{pet:0, play:0, ignore:Date.now()}, xp:0, level:1, collar:'none'
   };
   let stateLock = false, lastDec = 0;
   const needs = {energy:0.8, fun:0.7, social:0.6};
@@ -65,6 +65,8 @@
   let keyIdx = 0, videoReady = false;
   const posterImg = new Image(); posterImg.src = 'animations/start.png';
   let animReadyHandler = null, audioCtx = null, userInteracted = false;
+
+  let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
 
   const ANIM = {
     idle:   {src:null, type:'poster'},
@@ -473,10 +475,7 @@
 
   let tttBoardData, tttActive, tttPlayer, tttOver, tttTimer;
   const winPatterns = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  const cleanupTTT = () => {
-    if (tttTimer) clearTimeout(tttTimer);
-    tttActive = false;
-  };
+  const cleanupTTT = () => { if (tttTimer) clearTimeout(tttTimer); tttActive = false; };
   const renderTTT = () => {
     tttBoard.innerHTML = '';
     tttBoardData.forEach((c,i) => {
@@ -517,10 +516,7 @@
       tttMsg.textContent = 'Твой ход (X)';
     }
   };
-  const setCell = (i, pl) => {
-    tttBoardData[i] = pl;
-    renderTTT();
-  };
+  const setCell = (i, pl) => { tttBoardData[i] = pl; renderTTT(); };
   const checkTTT = () => {
     for (const [a,b,c] of winPatterns) {
       if (tttBoardData[a]&&tttBoardData[a]===tttBoardData[b]&&tttBoardData[a]===tttBoardData[c]) {
@@ -671,25 +667,82 @@
   canvas.addEventListener('pointerdown', (e) => {
     if (!userInteracted) { userInteracted = true; initVideoPlayback(); }
     if (document.querySelector('.game-modal.active')) return;
-    if (pet.dragged || pet.sleep) return;
+
     const mx = e.clientX, my = e.clientY;
-    if (Math.hypot(mx-pet.x, my-pet.y) >= 60) return;
-    pet.dragged = true;
-    pet.dx = pet.x - mx; pet.dy = pet.y - my;
-    pet.memory.pet = Date.now();
-    canvas.setPointerCapture(e.pointerId);
+
+    if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
+      e.preventDefault();
+      ballDrag = true;
+      ballDragOffX = pet.ball.x - mx;
+      ballDragOffY = pet.ball.y - my;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if (pet.dragged || pet.sleep) return;
+    if (Math.hypot(mx - pet.x, my - pet.y) < 60) {
+      pet.dragged = true;
+      pet.dx = pet.x - mx;
+      pet.dy = pet.y - my;
+      pet.memory.pet = Date.now();
+      canvas.setPointerCapture(e.pointerId);
+    }
   });
+
   canvas.addEventListener('pointermove', (e) => {
+    if (ballDrag) {
+      e.preventDefault();
+      pet.ball.x = clamp(e.clientX + ballDragOffX, 30, W - 30);
+      pet.ball.y = clamp(e.clientY + ballDragOffY, 30, H - 30);
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      return;
+    }
     if (!pet.dragged) return;
     e.preventDefault();
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
   });
+
   canvas.addEventListener('pointerup', (e) => {
-    if (pet.dragged) { pet.dragged = false; pet.memory.pet = Date.now(); canvas.releasePointerCapture(e.pointerId); }
+    if (ballDrag) {
+      ballDrag = false;
+      canvas.releasePointerCapture(e.pointerId);
+      return;
+    }
+    if (pet.dragged) {
+      pet.dragged = false;
+      pet.memory.pet = Date.now();
+      canvas.releasePointerCapture(e.pointerId);
+    }
   });
+
   canvas.addEventListener('pointercancel', (e) => {
-    if (pet.dragged) { pet.dragged = false; canvas.releasePointerCapture(e.pointerId); }
+    if (ballDrag) {
+      ballDrag = false;
+      canvas.releasePointerCapture(e.pointerId);
+    }
+    if (pet.dragged) {
+      pet.dragged = false;
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  });
+
+  canvas.addEventListener('click', (e) => {
+    if (document.querySelector('.game-modal.active')) return;
+    const mx = e.clientX, my = e.clientY;
+    if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
+      return;
+    }
+    if (Math.hypot(mx - pet.x, my - pet.y) < 60) {
+      return;
+    }
+    if (!pet.ball.active) {
+      pet.ball.x = clamp(mx, 30, W-30);
+      pet.ball.y = clamp(my, 30, H-30);
+      pet.ball.active = true;
+      showBubble('Вот твой мячик!', 1500);
+    }
   });
 
   dogBed.addEventListener('pointerdown', (e) => {
