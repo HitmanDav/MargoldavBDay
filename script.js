@@ -213,21 +213,27 @@
     if (videoReady) return;
     dogVideo.muted = true;
     dogVideo.playsInline = true;
-    dogVideo.play().then(() => { videoReady = true; dogVideo.pause(); }).catch(() => { videoReady = false; });
+    dogVideo.play().then(() => {
+        videoReady = true;
+        dogVideo.pause();
+        // Активируем ту анимацию, которая сейчас должна быть
+        setAnim(pet.anim);
+    }).catch(() => { videoReady = false; });
   };
+
   const setAnim = (name) => {
     if (pet.anim === name && name !== 'sneeze' && name !== 'look') return;
     const anim = ANIM[name];
     if (!anim) return;
     pet.anim = name;
-    if (anim.type === 'poster') {
-      dogVideo.pause();
-      dogVideo.currentTime = 0;
-    } else if (videoReady) {
-      if (animReadyHandler) dogVideo.removeEventListener('canplay', animReadyHandler);
-      dogVideo.src = anim.src;
-      dogVideo.playbackRate = anim.rate || 1;
-      dogVideo.loop = anim.loop || false;
+
+    // Всегда настраиваем источник видео
+    if (animReadyHandler) dogVideo.removeEventListener('canplay', animReadyHandler);
+    dogVideo.src = anim.src;
+    dogVideo.playbackRate = anim.rate || 1;
+    dogVideo.loop = anim.loop || false;
+
+    if (videoReady) {
       if (dogVideo.readyState >= 2) {
         dogVideo.currentTime = 0;
         dogVideo.play().catch(()=>{});
@@ -241,7 +247,9 @@
         dogVideo.addEventListener('canplay', animReadyHandler);
       }
     }
+    // Если ещё не готово, анимация настроена, но не запущена – запустится при initVideoPlayback.
   };
+
   const updateAnimByState = () => {
     if (pet.sleep) { setAnim('sleep'); return; }
     const spd = Math.hypot(pet.vx, pet.vy);
@@ -420,19 +428,19 @@
           if (pet.onMoveEnd) { const cb = pet.onMoveEnd; pet.onMoveEnd = null; cb(); }
         }
       }
+      // Сначала пересчитываем скорость
+      pet.vx = pet.targetX ? (pet.targetX-pet.x)*0.05 : 0;
+      pet.vy = pet.targetY ? (pet.targetY-pet.y)*0.05 : 0;
+      // Теперь обновляем анимацию (учитывая свежую скорость)
       updateAnimByState();
-
-      // Улучшенное обновление направления (зеркала)
+      // Направление взгляда
       if (pet.moving && pet.targetX !== null) {
         pet.facing = pet.targetX > pet.x;
       } else if (Math.abs(pet.vx) > 0.1) {
         pet.facing = pet.vx > 0;
       }
-
       if (settings.showPrints && enableFX && (Math.abs(pet.vx)>0.5 || pet.moving) && pet.y >= H-100) addPrint();
     }
-    pet.vx = pet.targetX ? (pet.targetX-pet.x)*0.05 : 0;
-    pet.vy = pet.targetY ? (pet.targetY-pet.y)*0.05 : 0;
     ctx.clearRect(0, 0, W, H);
     drawWeather();
     drawBall();
@@ -448,9 +456,6 @@
   const resize = () => {
     const dpr = isLow ? Math.min(window.devicePixelRatio,2) : window.devicePixelRatio||1;
     W = window.innerWidth; H = window.innerHeight;
-    // Устанавливаем мышь в центр окна
-    mouseX = W / 2;
-    mouseY = H / 2;
     canvas.width = W*dpr; canvas.height = H*dpr;
     canvas.style.width = W+'px'; canvas.style.height = H+'px';
     ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr,dpr);
@@ -461,6 +466,9 @@
     }
     pet.ball.x = clamp(pet.ball.x, 100, W-100);
     pet.ball.y = clamp(pet.ball.y, 100, H-100);
+    // Сбрасываем мышь в центр экрана
+    mouseX = W / 2;
+    mouseY = H / 2;
     updateWeatherFx();
   };
   window.addEventListener('resize', resize);
@@ -709,6 +717,7 @@
 
     const mx = e.clientX, my = e.clientY;
 
+    // Мячик
     if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
       e.preventDefault();
       ballDrag = true;
@@ -718,6 +727,7 @@
       return;
     }
 
+    // Лежанка
     const bedW = 160, bedH = 100;
     const bedCX = pet.bedX + bedW/2, bedCY = pet.bedY + bedH/2;
     if (Math.hypot(mx - bedCX, my - bedCY) < Math.max(bedW, bedH)/2 + 10) {
@@ -740,7 +750,7 @@
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    // Всегда обновляем координаты мыши
+    // Важно: всегда обновляем координаты мыши
     mouseX = e.clientX;
     mouseY = e.clientY;
 
@@ -760,7 +770,6 @@
     e.preventDefault();
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
-    // Направление по фактическому смещению
     pet.facing = (e.clientX + pet.dx) > pet.x;
   });
 
