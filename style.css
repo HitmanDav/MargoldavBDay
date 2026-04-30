@@ -27,13 +27,8 @@ body.dark-theme { background: radial-gradient(circle at 20% 20%, #1a1a2e, #0f0f1
   font-size: 32px; opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 50;
 }
 #dogBed {
-  position: fixed; width: 160px; height: 100px;
-  background: #6B4F4F; border-radius: 50%; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-  cursor: grab; z-index: 10; display: flex; align-items: center; justify-content: center;
-  font-size: 50px; transition: left 0.1s, top 0.1s; border: 3px solid #D2B48C;
-  box-sizing: content-box; touch-action: none;
+  display: none;   /* Лежанка теперь рисуется на canvas */
 }
-#dogBed:active { cursor: grabbing; }
 #menuButton, #sleepToggleButton, #guestButton {
   position: fixed; top: 20px; width: 50px; height: 50px;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);

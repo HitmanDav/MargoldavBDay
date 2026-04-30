@@ -67,9 +67,10 @@
   let animReadyHandler = null, audioCtx = null, userInteracted = false;
 
   let ballDrag = false, ballDragOffX = 0, ballDragOffY = 0;
+  let bedDrag = false, bedOffX = 0, bedOffY = 0;   // перетаскивание лежанки
 
   const ANIM = {
-    idle:   {src:null, type:'poster'},
+    idle:   {src:'animations/sitting.webm', type:'video', rate:1, loop:true},
     walk:   {src:'animations/walk.webm', type:'video', rate:1},
     run:    {src:'animations/run.webm',  type:'video', rate:1},
     sleep:  {src:'animations/sleep.webm', type:'video', rate:1, loop:true},
@@ -250,26 +251,51 @@
     else setAnim('run');
   };
 
+  // Рисуем лежанку на canvas (под псом)
+  const drawBed = () => {
+    const bedW = 160, bedH = 100;
+    const bx = pet.bedX, by = pet.bedY;
+    ctx.save();
+    ctx.fillStyle = 'rgba(107,79,79,0.7)';
+    ctx.strokeStyle = '#D2B48C';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(bx + bedW/2, by + bedH/2, bedW/2, bedH/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = '40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText('🛏️', bx + bedW/2, by + bedH/2);
+    ctx.restore();
+  };
+
   const drawDog = () => {
     const baseW = posterImg.complete && posterImg.naturalWidth ? posterImg.naturalWidth : 130;
     const baseH = posterImg.complete && posterImg.naturalHeight ? posterImg.naturalHeight : 130;
-    const w = baseW, h = baseH;
     const scale = settings.size / 100;
-    const dw = w * scale, dh = h * scale;
+    const dw = baseW * scale, dh = baseH * scale;
     const x = pet.x - dw/2, y = pet.y - dh/2;
+
     if (pet.collar !== 'none') {
       ctx.save();
       ctx.strokeStyle = pet.collar; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.ellipse(pet.x, pet.y - dh*0.35, dw*0.25, 8, 0, 0, Math.PI*2); ctx.stroke();
       ctx.restore();
     }
-    if (pet.anim === 'idle' || !videoReady || dogVideo.readyState < 2 || dogVideo.ended) {
-      if (posterImg.complete) ctx.drawImage(posterImg, x, y, dw, dh);
-      return;
-    }
+
+    const usePoster = !videoReady || dogVideo.readyState < 2 || dogVideo.ended;
+    const srcImg = usePoster ? posterImg : dogVideo;
+
     ctx.save();
-    if (!pet.facing) { ctx.translate(pet.x, pet.y); ctx.scale(-1,1); ctx.drawImage(dogVideo, -dw/2, -dh/2, dw, dh); }
-    else ctx.drawImage(dogVideo, x, y, dw, dh);
+    if (!pet.facing) {
+      ctx.translate(pet.x, pet.y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(srcImg, -dw/2, -dh/2, dw, dh);
+    } else {
+      ctx.drawImage(srcImg, x, y, dw, dh);
+    }
     ctx.restore();
   };
   const drawWeather = () => {
@@ -403,7 +429,10 @@
     pet.vx = pet.targetX ? (pet.targetX-pet.x)*0.05 : 0;
     pet.vy = pet.targetY ? (pet.targetY-pet.y)*0.05 : 0;
     ctx.clearRect(0, 0, W, H);
-    drawWeather(); drawBall(); drawDog();
+    drawWeather();
+    drawBall();
+    drawBed();        // лежанка на заднем плане
+    drawDog();
     if (bubble) {
       bubble.style.left = (pet.x-40) + 'px';
       bubble.style.top = (pet.y-110) + 'px';
@@ -672,11 +701,24 @@
 
     const mx = e.clientX, my = e.clientY;
 
+    // Проверка мячика
     if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
       e.preventDefault();
       ballDrag = true;
       ballDragOffX = pet.ball.x - mx;
       ballDragOffY = pet.ball.y - my;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // Проверка лежанки
+    const bedW = 160, bedH = 100;
+    const bedCX = pet.bedX + bedW/2, bedCY = pet.bedY + bedH/2;
+    if (Math.hypot(mx - bedCX, my - bedCY) < Math.max(bedW, bedH)/2 + 10) {
+      e.preventDefault();
+      bedDrag = true;
+      bedOffX = pet.bedX - mx;
+      bedOffY = pet.bedY - my;
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -700,16 +742,31 @@
       mouseY = e.clientY;
       return;
     }
+    if (bedDrag) {
+      e.preventDefault();
+      pet.bedX = clamp(e.clientX + bedOffX, 0, W - 160);
+      pet.bedY = clamp(e.clientY + bedOffY, 0, H - 100);
+      return;
+    }
     if (!pet.dragged) return;
     e.preventDefault();
     pet.x = clamp(e.clientX + pet.dx, 60, W-60);
     pet.y = clamp(e.clientY + pet.dy, 80, H-80);
+    // обновляем направление при перетаскивании
+    const dx = e.clientX + pet.dx - pet.x;
+    if (Math.abs(dx) > 1) pet.facing = dx > 0;
   });
 
   canvas.addEventListener('pointerup', (e) => {
     if (ballDrag) {
       ballDrag = false;
       canvas.releasePointerCapture(e.pointerId);
+      return;
+    }
+    if (bedDrag) {
+      bedDrag = false;
+      canvas.releasePointerCapture(e.pointerId);
+      storage.set('spitz_bed', {x:pet.bedX, y:pet.bedY});
       return;
     }
     if (pet.dragged) {
@@ -724,6 +781,11 @@
       ballDrag = false;
       canvas.releasePointerCapture(e.pointerId);
     }
+    if (bedDrag) {
+      bedDrag = false;
+      canvas.releasePointerCapture(e.pointerId);
+      storage.set('spitz_bed', {x:pet.bedX, y:pet.bedY});
+    }
     if (pet.dragged) {
       pet.dragged = false;
       canvas.releasePointerCapture(e.pointerId);
@@ -733,12 +795,8 @@
   canvas.addEventListener('click', (e) => {
     if (document.querySelector('.game-modal.active')) return;
     const mx = e.clientX, my = e.clientY;
-    if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) {
-      return;
-    }
-    if (Math.hypot(mx - pet.x, my - pet.y) < 60) {
-      return;
-    }
+    if (pet.ball.active && Math.hypot(mx - pet.ball.x, my - pet.ball.y) < pet.ball.r) return;
+    if (Math.hypot(mx - pet.x, my - pet.y) < 60) return;
     if (!pet.ball.active) {
       pet.ball.x = clamp(mx, 30, W-30);
       pet.ball.y = clamp(my, 30, H-30);
@@ -747,27 +805,7 @@
     }
   });
 
-  dogBed.addEventListener('pointerdown', (e) => {
-    if (document.querySelector('.game-modal.active')) return;
-    e.stopPropagation(); e.preventDefault();
-    pet.bedDrag = true;
-    const rect = dogBed.getBoundingClientRect();
-    pet.bedOffX = e.clientX - rect.left; pet.bedOffY = e.clientY - rect.top;
-    dogBed.setPointerCapture(e.pointerId);
-  });
-  dogBed.addEventListener('pointermove', (e) => {
-    if (!pet.bedDrag) return;
-    e.preventDefault();
-    pet.bedX = clamp(e.clientX - pet.bedOffX, 0, W-160);
-    pet.bedY = clamp(e.clientY - pet.bedOffY, 0, H-100);
-    dogBed.style.left = pet.bedX + 'px'; dogBed.style.top = pet.bedY + 'px';
-  });
-  dogBed.addEventListener('pointerup', (e) => {
-    if (pet.bedDrag) { pet.bedDrag = false; storage.set('spitz_bed', {x:pet.bedX, y:pet.bedY}); dogBed.releasePointerCapture(e.pointerId); }
-  });
-  dogBed.addEventListener('pointercancel', (e) => {
-    if (pet.bedDrag) { pet.bedDrag = false; dogBed.releasePointerCapture(e.pointerId); }
-  });
+  // Убираем старые слушатели dogBed, они больше не нужны
 
   const startStepCounter = () => {
     if (stepWatchId) return;
@@ -832,7 +870,6 @@
   pet.x = W/2; pet.y = H/2;
   const savedBed = storage.get('spitz_bed', {x:W-200, y:H-150});
   pet.bedX = savedBed.x; pet.bedY = savedBed.y;
-  dogBed.style.left = pet.bedX+'px'; dogBed.style.top = pet.bedY+'px';
 
   loadSettings(); loadPet(); loadSteps(); loadDiary();
 
@@ -845,6 +882,10 @@
   loadConfig();
   spawnBall();
   setInterval(() => { if (!pet.ball.active && Math.random() < 0.3) spawnBall(); }, 10000);
+
+  // Запрещаем автодвижение первые 2 секунды
+  stateLock = true;
+  setTimeout(() => { stateLock = false; }, 2000);
 
   requestAnimationFrame(gameLoop);
 })();
