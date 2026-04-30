@@ -26,9 +26,7 @@ body.dark-theme { background: radial-gradient(circle at 20% 20%, #1a1a2e, #0f0f1
   position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
   font-size: 32px; opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 50;
 }
-#dogBed {
-  display: none;   /* лежанка теперь на canvas */
-}
+#dogBed { display: none; }
 #menuButton, #sleepToggleButton, #guestButton {
   position: fixed; top: 20px; width: 50px; height: 50px;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
@@ -111,6 +109,38 @@ body.dark-theme { background: radial-gradient(circle at 20% 20%, #1a1a2e, #0f0f1
 .simon-btn.active {
   filter: brightness(1.5);
   transform: scale(1.1);
+}
+
+/* Чат */
+.chat-message {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.chat-message.user {
+  align-items: flex-end;
+}
+.chat-message.maybach {
+  align-items: flex-start;
+}
+.chat-bubble {
+  max-width: 80%;
+  padding: 10px 15px;
+  border-radius: 20px;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+  background: rgba(255,255,255,0.1);
+  color: white;
+}
+.chat-message.user .chat-bubble {
+  background: #ffb347;
+  color: black;
+}
+.chat-typing {
+  color: #ffd966;
+  font-style: italic;
+  margin-left: 10px;
 }
 
 @media (max-width: 600px) {

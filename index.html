@@ -16,6 +16,7 @@
 <div id="sleepToggleButton">😴</div>
 <div id="guestButton">👤</div>
 
+<!-- Модалки игр -->
 <div id="tictactoeModal" class="game-modal">
   <div class="game-container">
     <div style="color:#ffd966;font-size:24px;">🎮 Крестики-нолики</div>
@@ -91,6 +92,20 @@
   </div>
 </div>
 
+<!-- Чат -->
+<div id="chatModal" class="game-modal">
+  <div class="game-container" style="max-width:400px;text-align:left;">
+    <div style="color:#ffd966;font-size:24px;text-align:center;">💬 Чат с Майбахом</div>
+    <div id="chatMessages" style="height:300px;overflow-y:auto;border:1px solid #ffb347;border-radius:10px;padding:10px;margin:15px 0;background:rgba(0,0,0,0.3);"></div>
+    <div style="display:flex;gap:10px;">
+      <input type="text" id="chatInput" placeholder="Напиши Майбаху..." style="flex:1;padding:10px;border-radius:20px;border:1px solid #ffb347;background:rgba(0,0,0,0.5);color:white;outline:none;">
+      <button id="chatSendBtn" style="padding:10px 15px;border-radius:20px;background:#ffb347;color:black;border:none;cursor:pointer;">➤</button>
+    </div>
+    <button id="newChatBtn" style="margin-top:10px;">🔄 Новый чат</button>
+    <button id="closeChatBtn" style="margin-top:5px;">✕ Закрыть</button>
+  </div>
+</div>
+
 <div id="menuPanel">
   <button id="menuCloseBtn">✕</button>
   <div class="menu-section">
@@ -116,6 +131,7 @@
       <input type="text" id="textInputMenu" placeholder="Спросить...">
     </div>
     <div class="menu-row">
+      <button class="menu-btn" id="chatBtnMenu">💬</button>
       <button class="menu-btn" id="diaryBtn">📔</button>
       <button class="menu-btn" id="photoBtn">📸</button>
       <button class="menu-btn" id="weatherBtn">🌤</button>
@@ -124,9 +140,9 @@
   <div class="menu-section">
     <h3>🎨 Внешность</h3>
     <div class="menu-row">
-      <label style="color:#ccc;">Ошейник:</label>
+      <label style="color:#ccc;">Нимб:</label>
       <select id="collarSelect" style="padding:5px;border-radius:10px;">
-        <option value="none">Без ошейника</option>
+        <option value="none">Без нимба</option>
         <option value="red">Красный</option>
         <option value="blue">Синий</option>
         <option value="green">Зелёный</option>
