@@ -517,12 +517,12 @@
     fetch('config.json', { signal: AbortSignal.timeout(5000) })
       .then(r => r.json())
       .then(d => {
-        if (d.apiKeys) CONFIG.apiKeys = decryptKeys(d.apiKeys);
+        if (d.apiKeys) CONFIG.apiKeys = d.apiKeys;
         if (d.models) CONFIG.models = d.models;
         if (d.systemPrompt) CONFIG.systemPrompt = d.systemPrompt;
         Object.freeze(CONFIG);
       }).catch(() => {});
-  };
+};
 
   const getApiKey = () => CONFIG.apiKeys.length ? CONFIG.apiKeys[keyIdx] : null;
   const rotateKey = () => { keyIdx = (keyIdx+1) % CONFIG.apiKeys.length; return CONFIG.apiKeys[keyIdx]; };
